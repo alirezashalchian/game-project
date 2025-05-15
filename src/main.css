@@ -1,0 +1,53 @@
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+#canvas-container {
+  width: 100%;
+  height: 100%;
+}
+
+.save-system-ui {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  gap: 10px;
+  z-index: 100;
+}
+
+.save-btn, .load-btn {
+  background-color: #7289da;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+  display: inline-block;
+}
+
+.save-btn:hover, .load-btn:hover {
+  background-color: #5a6ebd;
+}
+
+/* Fix for view positioning */
+.w-12.h-12.relative {
+  contain: strict;
+}
+
+/* Prevent canvas interference */
+canvas {
+  pointer-events: none !important;
+}
+
+/* View container styling */
+.w-12.h-12.relative > div {
+  background: transparent !important;
+}
