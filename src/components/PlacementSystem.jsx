@@ -3,6 +3,7 @@ import { useThree, useFrame } from "@react-three/fiber";
 // import { useGLTF } from "@react-three/drei";
 import { useRoom } from "./RoomContext";
 import * as THREE from "three";
+import { roomConfig } from "./Room/roomConfig";
 
 export function PlacementSystem() {
   const { camera, raycaster, pointer } = useThree();
@@ -10,34 +11,42 @@ export function PlacementSystem() {
     selectedModel,
     isPlacementMode,
     addModel,
-    placedModels,
     setIsPlacementMode,
     setSelectedModel,
+    currentRoom,
+    getModelsInCurrentRoom,
   } = useRoom();
 
-  const [placementPosition, setPlacementPosition] = useState(null);
+  // Setting initial position for placement preview
+  const [placementPosition, setPlacementPosition] = useState([0, 0, 0]);
   const [placementRotation, setPlacementRotation] = useState([0, 0, 0]);
   const [isValidPlacement, setIsValidPlacement] = useState(true);
   const indicatorRef = useRef();
 
-  // Define consistent grid and room dimensions
-  const ROOM_SIZE = 15.5;
-  const WALL_THICKNESS = 0.5;
-  const gridSize = 0.5; // Size of each grid unit in Three.js units
+  // Define grid cell size from room config
+  const cellSize = roomConfig.cellSize;
 
-  // Calculate floor height consistently
-  const FLOOR_HEIGHT = -ROOM_SIZE / 2 + WALL_THICKNESS / 2;
+  // Log when placement mode or model changes
+  useEffect(() => {
+    // console.log(
+    //   "Placement mode:",
+    //   isPlacementMode,
+    //   "Selected model:",
+    //   selectedModel?.id
+    // );
+  }, [isPlacementMode, selectedModel]);
 
-  // // Load model for calculation purposes
-  // const { scene: modelScene } = useGLTF(
-  //   selectedModel ? selectedModel.path : "/models/characters/Mage.glb",
-  //   { sRGBEncoding: true }
-  // );
+  // Calculate floor height based on current room
+  const getFloorHeight = () => {
+    if (!currentRoom) return 0;
+    return currentRoom.position[1] - roomConfig.innerSize / 2;
+  };
 
   // Handle rotation with R key
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "r" && selectedModel?.rotatable && isPlacementMode) {
+        // console.log("Rotating model");
         setPlacementRotation((prev) => [
           prev[0],
           prev[1] + Math.PI / 2, // Rotate 90 degrees on Y axis
@@ -47,6 +56,7 @@ export function PlacementSystem() {
 
       // Cancel placement with ESC
       if (e.key === "Escape" && isPlacementMode) {
+        // console.log("Canceling placement");
         setIsPlacementMode(false);
         setSelectedModel(null);
       }
@@ -58,37 +68,50 @@ export function PlacementSystem() {
 
   // Ray casting for placement
   useFrame(() => {
-    if (!isPlacementMode || !selectedModel) return;
+    if (!isPlacementMode || !selectedModel) {
+      return;
+    }
 
     // Cast ray from mouse position
     raycaster.setFromCamera(pointer, camera);
 
+    // Get models in the current room for collision detection
+    const currentRoomModels = currentRoom ? getModelsInCurrentRoom() : [];
+
+    // Get floor height (default to 0 if no current room)
+    const FLOOR_HEIGHT = getFloorHeight();
+
+    // Default floor plane at y=0 if no room is available yet
+    const floorY = currentRoom ? -FLOOR_HEIGHT : 0;
+
     // Create a plane representing the floor
-    const floorPlane = new THREE.Plane(
-      new THREE.Vector3(0, 1, 0),
-      -FLOOR_HEIGHT
-    );
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), floorY);
 
     // First, check for intersections with placed blocks
     const blockIntersections = [];
-    placedModels.forEach((model) => {
+    currentRoomModels.forEach((model) => {
       // Create a box geometry for collision detection
       const box = new THREE.Box3();
-      const modelWidth = model.gridSize?.width || 1;
-      const modelHeight = model.gridSize?.height || 1;
-      const modelDepth = model.gridSize?.depth || 1;
+      const modelWidth = model.gridDimensions?.width || 1;
+      const modelHeight = model.gridDimensions?.height || 1;
+      const modelDepth = model.gridDimensions?.depth || 1;
+
+      // Calculate world size based on grid dimensions
+      const worldWidth = modelWidth * cellSize;
+      const worldHeight = modelHeight * cellSize;
+      const worldDepth = modelDepth * cellSize;
 
       // Set box dimensions based on model size
-      const expansionAmount = 0.02; // Small expansion to make hitting more consistent to solve the preview plane glitching
+      const expansionAmount = 0.02; // Small expansion to make hitting more consistent
       box.min.set(
-        model.position[0] - (modelWidth * gridSize) / 2 - expansionAmount,
-        model.position[1] - (modelHeight * gridSize) / 2 - expansionAmount,
-        model.position[2] - (modelDepth * gridSize) / 2 - expansionAmount
+        model.position[0] - worldWidth / 2 - expansionAmount,
+        model.position[1] - worldHeight / 2 - expansionAmount,
+        model.position[2] - worldDepth / 2 - expansionAmount
       );
       box.max.set(
-        model.position[0] + (modelWidth * gridSize) / 2 + expansionAmount,
-        model.position[1] + (modelHeight * gridSize) / 2 + expansionAmount,
-        model.position[2] + (modelDepth * gridSize) / 2 + expansionAmount
+        model.position[0] + worldWidth / 2 + expansionAmount,
+        model.position[1] + worldHeight / 2 + expansionAmount,
+        model.position[2] + worldDepth / 2 + expansionAmount
       );
 
       const intersection = raycaster.ray.intersectBox(box, new THREE.Vector3());
@@ -104,141 +127,193 @@ export function PlacementSystem() {
     // Sort intersections by distance to camera
     blockIntersections.sort((a, b) => a.distance - b.distance);
 
+    // Get placement point
     let placementPoint;
+
     if (blockIntersections.length > 0) {
       // We hit a block, use the top face for placement
       const hit = blockIntersections[0];
 
-      // Calculate placement point on top of the hit block
-      const modelHeight = hit.model.gridSize?.height || 1;
+      // Calculate top of the hit model where new model will be placed
+      const hitModelHeight = hit.model.gridDimensions?.height || 1;
+      const topOfHitModel =
+        hit.model.position[1] + (hitModelHeight * cellSize) / 2;
+
       placementPoint = new THREE.Vector3(
         hit.point.x,
-        hit.model.position[1] + modelHeight * gridSize,
+        topOfHitModel,
         hit.point.z
       );
     } else {
       // No block hit, fall back to floor plane
       const planeIntersection = new THREE.Vector3();
-      raycaster.ray.intersectPlane(floorPlane, planeIntersection);
-      placementPoint = planeIntersection;
+      if (raycaster.ray.intersectPlane(floorPlane, planeIntersection)) {
+        placementPoint = planeIntersection;
+        // console.log("Ray hit floor plane at:", planeIntersection);
+      } else {
+        // If ray doesn't hit the floor plane, use camera forward vector to
+        // project a point in front of the camera
+        // console.log("Ray missed floor plane, using camera forward");
+
+        // Get camera direction
+        const cameraDirection = new THREE.Vector3(0, 0, -1);
+        cameraDirection.applyQuaternion(camera.quaternion);
+
+        // Create a point 5 units in front of camera
+        placementPoint = new THREE.Vector3();
+        placementPoint.copy(camera.position);
+        placementPoint.addScaledVector(cameraDirection, 5);
+
+        // Project to floor height
+        placementPoint.y = FLOOR_HEIGHT;
+      }
     }
 
     if (placementPoint) {
       // Basic grid snapping with half-cell offset
-      const cellSize = gridSize;
       const halfCell = cellSize / 2;
 
+      // Check if it's a medium scale model (2x2 grid)
+      const isMediumScale =
+        selectedModel.gridDimensions?.width === 2 &&
+        selectedModel.gridDimensions?.height === 2 &&
+        selectedModel.gridDimensions?.depth === 2;
+
+      // Apply special offset for medium scale models to align with walls
+      // For medium models (2x2), we need to shift them by half a grid cell
+      let offsetX = 0;
+      let offsetZ = 0;
+
+      if (isMediumScale) {
+        // Calculate which quadrant of the grid cell the pointer is in
+        // This determines the offset direction
+        const gridX = Math.floor(placementPoint.x / cellSize);
+        const gridZ = Math.floor(placementPoint.z / cellSize);
+
+        // Calculate the fractional position within the grid cell
+        const fracX = placementPoint.x / cellSize - gridX;
+        const fracZ = placementPoint.z / cellSize - gridZ;
+
+        // Adjust the offset based on which side of the grid cell center we're on
+        offsetX = fracX < 0.5 ? -halfCell : halfCell;
+        offsetZ = fracZ < 0.5 ? -halfCell : halfCell;
+      }
+
+      // Apply normal snapping for small and large models
+      // For medium models, add the calculated offset
       const snappedX =
-        Math.floor(placementPoint.x / cellSize) * cellSize + halfCell;
+        Math.floor(placementPoint.x / cellSize) * cellSize +
+        halfCell +
+        (isMediumScale ? offsetX : 0);
+
       const snappedZ =
-        Math.floor(placementPoint.z / cellSize) * cellSize + halfCell;
+        Math.floor(placementPoint.z / cellSize) * cellSize +
+        halfCell +
+        (isMediumScale ? offsetZ : 0);
 
       // Calculate Y position based on whether we're placing on floor or on a block
       let snappedY;
       if (blockIntersections.length > 0) {
         // Placing on top of another block
         const hit = blockIntersections[0];
-        const modelHeight = hit.model.gridSize?.height || 1;
-        snappedY = hit.model.position[1] + modelHeight * gridSize;
+        const hitModelHeight = hit.model.gridDimensions?.height || 1;
+        // Calculate the top position of the hit model
+        const topOfHitModel =
+          hit.model.position[1] + (hitModelHeight * cellSize) / 2;
+
+        // Place the new model directly on top of the hit model
+        // The bottom of the new model should be at the top of the hit model
+        const newModelHeight = selectedModel.gridDimensions?.height || 1;
+        snappedY = topOfHitModel + (newModelHeight * cellSize) / 2;
       } else {
-        // Placing on floor
-        const modelHeight = selectedModel.gridSize?.height || 1;
-        snappedY = FLOOR_HEIGHT + (modelHeight * gridSize) / 2;
+        // Placing on floor - adjust to place model directly on floor
+        const modelHeight = selectedModel.gridDimensions?.height || 1;
+        // Place bottom of model exactly at floor level
+        snappedY = FLOOR_HEIGHT + (modelHeight * cellSize) / 2;
       }
 
       // Update placement position
       setPlacementPosition([snappedX, snappedY, snappedZ]);
 
-      // Check for collisions
-      setIsValidPlacement(
-        checkValidPlacement(
+      if (currentRoom) {
+        // Check if the position is within the current room
+        const isWithinCurrentRoom = checkIsWithinRoom(
+          [snappedX, snappedY, snappedZ],
+          currentRoom
+        );
+
+        // Check for collisions with other objects
+        const hasCollisions = checkForCollisions(
           [snappedX, snappedY, snappedZ],
           placementRotation,
-          selectedModel.gridSize
-        )
-      );
+          selectedModel.gridDimensions,
+          currentRoomModels
+        );
+
+        // Check if placement is supported from below
+        const isSupported = checkIsSupported(
+          [snappedX, snappedY, snappedZ],
+          placementRotation,
+          selectedModel.gridDimensions,
+          currentRoomModels,
+          FLOOR_HEIGHT
+        );
+
+        // Placement is valid if it's within room, has no collisions, and is supported
+        setIsValidPlacement(
+          isWithinCurrentRoom && !hasCollisions && isSupported
+        );
+      } else {
+        // If no room is set yet, just allow placement anywhere
+        setIsValidPlacement(true);
+      }
     }
   });
 
-  // Check if placement position is valid
-  const checkValidPlacement = (position, rotation, size) => {
-    if (!size) return true;
+  // Check if a position is within the current room boundaries
+  const checkIsWithinRoom = (position, room) => {
+    if (!room || !room.boundaries) return false;
 
-    // Calculate boundaries of placement area (inner room)
-    const innerRoomSize = ROOM_SIZE - WALL_THICKNESS;
-    const maxDistance = innerRoomSize / 2;
+    const { boundaries } = room;
+    const [x, y, z] = position;
 
-    // Get model dimensions based on rotation
+    // Get the size of the model in world units
+    const width = selectedModel?.gridDimensions?.width || 1;
+    const height = selectedModel?.gridDimensions?.height || 1;
+    const depth = selectedModel?.gridDimensions?.depth || 1;
+
+    // Calculate the model's half-dimensions in world units
+    const halfWidth = (width * cellSize) / 2;
+    const halfHeight = (height * cellSize) / 2;
+    const halfDepth = (depth * cellSize) / 2;
+
+    // Check if any part of the model would be outside room boundaries
+    return (
+      x - halfWidth >= boundaries.minX &&
+      x + halfWidth <= boundaries.maxX &&
+      y - halfHeight >= boundaries.minY &&
+      y + halfHeight <= boundaries.maxY &&
+      z - halfDepth >= boundaries.minZ &&
+      z + halfDepth <= boundaries.maxZ
+    );
+  };
+
+  // Check for collisions with other objects
+  const checkForCollisions = (position, rotation, size, roomModels) => {
+    if (!size) return false;
+
+    // Calculate model dimensions based on rotation
     const thisWidth = rotation[1] % Math.PI === 0 ? size.width : size.depth;
     const thisDepth = rotation[1] % Math.PI === 0 ? size.depth : size.width;
     const thisHeight = size.height || 1;
 
     // Calculate model half-sizes in world units
-    const halfSizeX = (thisWidth * gridSize) / 2;
-    const halfSizeZ = (thisDepth * gridSize) / 2;
-    const halfSizeY = (thisHeight * gridSize) / 2;
-
-    // Check if model would clip into walls
-    if (
-      Math.abs(position[0]) + halfSizeX > maxDistance ||
-      Math.abs(position[2]) + halfSizeZ > maxDistance ||
-      position[1] + halfSizeY > ROOM_SIZE / 2 // Check ceiling
-    ) {
-      return false;
-    }
-
-    // Check if model would be below floor
-    if (position[1] - halfSizeY < FLOOR_HEIGHT) {
-      return false;
-    }
-
-    // Check if there's a supporting surface beneath the block (full area support)
-    const blockBottom = position[1] - halfSizeY;
-    let allCellsSupported = true;
-    for (let x = 0; x < thisWidth; x++) {
-      for (let z = 0; z < thisDepth; z++) {
-        // Calculate the world position of each cell under the block
-        const cellX = position[0] - halfSizeX + gridSize / 2 + x * gridSize;
-        const cellZ = position[2] - halfSizeZ + gridSize / 2 + z * gridSize;
-        // Check if this cell is supported by the floor
-        const supportedByFloor = Math.abs(blockBottom - FLOOR_HEIGHT) < 0.01;
-        // Or by a block directly beneath
-        const supportedByBlock = placedModels.some((model) => {
-          const modelTop =
-            model.position[1] + ((model.gridSize?.height || 1) * gridSize) / 2;
-          const modelWidth =
-            model.rotation[1] % Math.PI === 0
-              ? model.gridSize.width
-              : model.gridSize.depth;
-          const modelDepth =
-            model.rotation[1] % Math.PI === 0
-              ? model.gridSize.depth
-              : model.gridSize.width;
-          const minX = model.position[0] - (modelWidth * gridSize) / 2;
-          const maxX = model.position[0] + (modelWidth * gridSize) / 2;
-          const minZ = model.position[2] - (modelDepth * gridSize) / 2;
-          const maxZ = model.position[2] + (modelDepth * gridSize) / 2;
-          return (
-            Math.abs(modelTop - blockBottom) < 0.01 &&
-            cellX >= minX &&
-            cellX < maxX &&
-            cellZ >= minZ &&
-            cellZ < maxZ
-          );
-        });
-        if (!supportedByFloor && !supportedByBlock) {
-          allCellsSupported = false;
-          break;
-        }
-      }
-      if (!allCellsSupported) break;
-    }
-    if (!allCellsSupported) {
-      return false;
-    }
+    const halfSizeX = (thisWidth * cellSize) / 2;
+    const halfSizeZ = (thisDepth * cellSize) / 2;
+    const halfSizeY = (thisHeight * cellSize) / 2;
 
     // 3D collision check with other placed models
-    return !placedModels.some((model) => {
+    return roomModels.some((model) => {
       const dx = Math.abs(model.position[0] - position[0]);
       const dy = Math.abs(model.position[1] - position[1]);
       const dz = Math.abs(model.position[2] - position[2]);
@@ -246,71 +321,190 @@ export function PlacementSystem() {
       // Get existing model dimensions based on rotation
       const modelWidth =
         model.rotation[1] % Math.PI === 0
-          ? model.gridSize.width
-          : model.gridSize.depth;
+          ? model.gridDimensions.width
+          : model.gridDimensions.depth;
       const modelDepth =
         model.rotation[1] % Math.PI === 0
-          ? model.gridSize.depth
-          : model.gridSize.width;
-      const modelHeight = model.gridSize.height || 1;
+          ? model.gridDimensions.depth
+          : model.gridDimensions.width;
+      const modelHeight = model.gridDimensions.height || 1;
 
-      // Check overlap in all three dimensions
+      // Calculate model half-sizes in world units
+      const modelHalfWidth = (modelWidth * cellSize) / 2;
+      const modelHalfDepth = (modelDepth * cellSize) / 2;
+      const modelHalfHeight = (modelHeight * cellSize) / 2;
+
+      // Check for overlap
       return (
-        dx < ((thisWidth + modelWidth) * gridSize) / 2 &&
-        dy < ((thisHeight + modelHeight) * gridSize) / 2 &&
-        dz < ((thisDepth + modelDepth) * gridSize) / 2
+        dx < halfSizeX + modelHalfWidth &&
+        dy < halfSizeY + modelHalfHeight &&
+        dz < halfSizeZ + modelHalfDepth
       );
     });
   };
 
-  // Handle click to place model
+  // Check if the model is supported from below
+  const checkIsSupported = (
+    position,
+    rotation,
+    size,
+    roomModels,
+    floorHeight
+  ) => {
+    if (!size) return true;
+
+    // Get model dimensions based on rotation
+    const thisWidth = rotation[1] % Math.PI === 0 ? size.width : size.depth;
+    const thisDepth = rotation[1] % Math.PI === 0 ? size.depth : size.width;
+    const thisHeight = size.height || 1;
+
+    // Calculate model bottom Y position in world units
+    const modelBottom = position[1] - (thisHeight * cellSize) / 2;
+
+    // Is it resting on the floor? Use a very small tolerance to ensure models are exactly on the floor
+    const isOnFloor = Math.abs(modelBottom - floorHeight) < 0.0001;
+    if (isOnFloor) return true;
+
+    // Calculate placement boundaries in world units
+    const placementMinX = position[0] - (thisWidth * cellSize) / 2;
+    const placementMaxX = position[0] + (thisWidth * cellSize) / 2;
+    const placementMinZ = position[2] - (thisDepth * cellSize) / 2;
+    const placementMaxZ = position[2] + (thisDepth * cellSize) / 2;
+
+    // Create grid of support points to check
+    const SUPPORT_POINTS = 4; // Number of support points along each axis
+    const supportPoints = [];
+
+    // Generate a grid of points to check for support (at least one must be supported)
+    for (let i = 0; i <= SUPPORT_POINTS; i++) {
+      for (let j = 0; j <= SUPPORT_POINTS; j++) {
+        const x =
+          placementMinX +
+          (placementMaxX - placementMinX) * (i / SUPPORT_POINTS);
+        const z =
+          placementMinZ +
+          (placementMaxZ - placementMinZ) * (j / SUPPORT_POINTS);
+        supportPoints.push({ x, z });
+      }
+    }
+
+    // Check if any of the support points have a model below them
+    const hasSufficientSupport = supportPoints.some((point) => {
+      return roomModels.some((model) => {
+        // Get the top Y coordinate of the model
+        const supportModelHeight = model.gridDimensions?.height || 1;
+        const modelTop =
+          model.position[1] + (supportModelHeight * cellSize) / 2;
+
+        // Check if this model is directly below our placement position with small tolerance
+        const isBelow = Math.abs(modelTop - modelBottom) < 0.0001;
+        if (!isBelow) return false;
+
+        // Get dimensions of supporting model
+        const modelWidth =
+          model.rotation[1] % Math.PI === 0
+            ? model.gridDimensions.width
+            : model.gridDimensions.depth;
+        const modelDepth =
+          model.rotation[1] % Math.PI === 0
+            ? model.gridDimensions.depth
+            : model.gridDimensions.width;
+
+        // Calculate model boundaries in world units
+        const modelMinX = model.position[0] - (modelWidth * cellSize) / 2;
+        const modelMaxX = model.position[0] + (modelWidth * cellSize) / 2;
+        const modelMinZ = model.position[2] - (modelDepth * cellSize) / 2;
+        const modelMaxZ = model.position[2] + (modelDepth * cellSize) / 2;
+
+        // Check if this support point is over the supporting model
+        return (
+          point.x >= modelMinX &&
+          point.x <= modelMaxX &&
+          point.z >= modelMinZ &&
+          point.z <= modelMaxZ
+        );
+      });
+    });
+
+    return hasSufficientSupport;
+  };
+
+  // Handle model placement on click
   const handlePlaceModel = (e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
+
+    // console.log("Attempting to place model:", {
+    //   placementPosition,
+    //   placementRotation,
+    //   isValidPlacement,
+    //   selectedModel: selectedModel?.id,
+    //   currentRoom: currentRoom?.id,
+    // });
+
     if (
       !isPlacementMode ||
       !selectedModel ||
       !placementPosition ||
       !isValidPlacement
-    )
+    ) {
+      // console.warn("Invalid placement conditions", {
+      //   isPlacementMode,
+      //   selectedModel: !!selectedModel,
+      //   placementPosition: !!placementPosition,
+      //   isValidPlacement,
+      // });
       return;
+    }
 
-    // Add model to the room
-    addModel(selectedModel, placementPosition, placementRotation);
+    // Only add model if we're in a room
+    if (currentRoom) {
+      // Add the model at the placement position
+      addModel(selectedModel, placementPosition, placementRotation);
+      // console.log("Model placed in room:", currentRoom.id);
+    } else {
+      // Provide feedback that model can't be placed without a room
+      // console.warn("Cannot place model: No room detected");
+    }
+
+    // If not in continuous placement mode, exit placement mode
+    if (!selectedModel.continuousPlacement) {
+      setIsPlacementMode(false);
+      setSelectedModel(null);
+    }
   };
 
-  // No preview if not in placement mode or no model selected
-  if (!isPlacementMode || !selectedModel || !placementPosition) return null;
+  // Show placement preview
+  const renderPlacementPreview = () => {
+    if (!isPlacementMode || !selectedModel || !placementPosition) {
+      return null;
+    }
 
-  // // Calculate surface position for indicator plane
-  // const surfaceY =
-  //   placementPosition[1] -
-  //   (selectedModel.gridSize.height * gridSize) / 2 +
-  //   0.01;
+    // Calculate world dimensions based on grid dimensions
+    const worldWidth = selectedModel.gridDimensions.width * cellSize;
+    const worldHeight = selectedModel.gridDimensions.height * cellSize;
+    const worldDepth = selectedModel.gridDimensions.depth * cellSize;
 
-  return (
-    <group
-      position={placementPosition}
-      rotation={placementRotation}
-      ref={indicatorRef}
-      onClick={handlePlaceModel}
-    >
-      {/* Placement indicator plane */}
-      <mesh
-        position={[
-          0,
-          -(selectedModel.gridSize.height * gridSize) / 2 + 0.01,
-          0,
-        ]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <planeGeometry args={[0.5, 0.5]} />
-        <meshBasicMaterial
-          color={isValidPlacement ? "green" : "red"}
-          transparent={true}
-          opacity={0.6}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-    </group>
-  );
+    return (
+      <>
+        {/* Preview box */}
+        <mesh
+          position={placementPosition}
+          rotation={placementRotation}
+          onClick={handlePlaceModel}
+          ref={indicatorRef}
+        >
+          <boxGeometry args={[worldWidth, worldHeight, worldDepth]} />
+          <meshStandardMaterial
+            color={isValidPlacement ? "#00ff00" : "#ff0000"}
+            transparent={true}
+            opacity={0.6}
+            emissive={isValidPlacement ? "#00aa00" : "#aa0000"}
+            emissiveIntensity={0.5}
+          />
+        </mesh>
+      </>
+    );
+  };
+
+  return <>{renderPlacementPreview()}</>;
 }
