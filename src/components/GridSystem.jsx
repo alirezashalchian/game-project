@@ -1,30 +1,50 @@
 import React from "react";
 import { useRoom } from "./RoomContext";
+import { roomConfig } from "./Room/roomConfig";
 
-export function GridSystem({ size = 15.5, cellSize = 0.5, visible = true }) {
-  const { isPlacementMode } = useRoom();
+export function GridSystem({
+  size = roomConfig.innerSize,
+  cellSize = roomConfig.cellSize,
+  visible = true,
+}) {
+  const { isPlacementMode, currentRoom } = useRoom();
 
   // Only show grid in placement mode
   if (!isPlacementMode || !visible) return null;
 
-  // Room configuration from App.jsx
-  const roomSize = size;
-  const wallThickness = 0.5; // From ROOM_CONFIG.wallThickness
+  // Calculate the floor position based on current room
+  const getFloorHeight = () => {
+    if (!currentRoom) return 0;
+    return (
+      currentRoom.position[1] - roomConfig.innerSize / 2 + 0.01 // Small offset to prevent z-fighting
+    );
+  };
 
-  // Calculate the floor position consistently with App.jsx
-  const gridHeight = -roomSize / 2 + wallThickness / 2 + 0.01;
+  // Get grid height based on current room
+  const gridHeight = getFloorHeight();
 
   // Calculate grid dimensions
-  const gridSize = roomSize - wallThickness; // Inner space excluding walls
-  const cellCount = Math.floor(gridSize / cellSize);
+  const gridWidth = size - roomConfig.wallThickness; // Inner space excluding walls
+  const cellCount = Math.floor(gridWidth / cellSize);
 
   return (
-    <group position={[0, gridHeight, 0]} rotation={[0, 0, 0]}>
-      {/* Main grid helper */}
-      <gridHelper
-        args={[gridSize, cellCount, "#888888", "#444444"]}
-        position={[0, 0, 0]}
-      />
-    </group>
+    <>
+      {currentRoom && (
+        <group
+          position={[
+            currentRoom.position[0],
+            gridHeight,
+            currentRoom.position[2],
+          ]}
+          rotation={[0, 0, 0]}
+        >
+          {/* Main grid helper */}
+          <gridHelper
+            args={[gridWidth, cellCount, "#888888", "#444444"]}
+            position={[0, 0, 0]}
+          />
+        </group>
+      )}
+    </>
   );
 }
