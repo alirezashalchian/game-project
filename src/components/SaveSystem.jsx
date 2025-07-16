@@ -17,7 +17,7 @@ export function SaveSystem() {
     // For browser storage
     localStorage.setItem("roomDesign", saveString);
 
-    // For file download
+    // For File Download
     const blob = new Blob([saveString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
