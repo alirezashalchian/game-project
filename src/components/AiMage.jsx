@@ -1,9 +1,10 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls, useAnimations } from "@react-three/drei";
 import { RigidBody, CapsuleCollider, useRapier } from "@react-three/rapier";
 import { useRoom } from "./RoomContext";
+import { useCharacter } from "./CharacterContext";
 import * as THREE from "three";
 import { calculateRoomPosition } from "../utils/roomUtils";
 import { roomConfig } from "./Room/roomConfig";
@@ -12,6 +13,14 @@ export default function Mage() {
   const mage = useGLTF("./models/characters/Mage.glb");
   const animations = useAnimations(mage.animations, mage.scene);
   const { updateCurrentRoom, getCurrentRoomCoords } = useRoom();
+  const {
+    currentGravity,
+    updateWallTouchData,
+    clearWallTouchData,
+    registerTransitionCallback,
+  } = useCharacter();
+
+  console.log(mage.animations);
 
   const rigidBodyRef = useRef();
   const mageRef = useRef();
@@ -48,18 +57,11 @@ export default function Mage() {
   const [smoothedCameraPosition] = useState(
     () => new THREE.Vector3(0, cameraHeight, -cameraDistance)
   );
+
   const [smoothedCameraTarget] = useState(() => new THREE.Vector3());
 
-  // Gravity state
-  const [currentGravity, setCurrentGravity] = useState([0, -9.8, 0]);
-  const [wallTouchData, setWallTouchData] = useState(null);
   // Track which surface is currently the floor based on gravity direction
   const [currentFloorSurface, setCurrentFloorSurface] = useState("bottom");
-
-  // Debouncing for wall touch to prevent rapid switching
-  const wallTouchTimeout = useRef(null);
-  const lastWallTouchTime = useRef(0);
-  const WALL_TOUCH_DEBOUNCE_TIME = 200; // 200ms debounce
 
   // Character state - UPDATED to use quaternions
   const characterState = useRef({
@@ -73,7 +75,6 @@ export default function Mage() {
     acceleration: 25,
     deceleration: 8,
     // Surface orientation tracking
-    currentSurface: "bottom", // "bottom", "top", "front", "back", "left", "right"
     isTransitioning: false,
     transitionProgress: 0,
     transitionDuration: 1.0,
@@ -167,15 +168,6 @@ export default function Mage() {
     console.log(`Current floor surface updated to: ${newFloorSurface}`);
   }, [currentGravity]);
 
-  // Cleanup effect for wall touch timeouts
-  useEffect(() => {
-    return () => {
-      if (wallTouchTimeout.current) {
-        clearTimeout(wallTouchTimeout.current);
-      }
-    };
-  }, []);
-
   // Handle wall collision for gravity change
   const handleCollisionEnter = ({ other }) => {
     // Check if we collided with a wall
@@ -185,30 +177,8 @@ export default function Mage() {
         `Collision with wall: ${wallType}, Current floor: ${currentFloorSurface}`
       );
 
-      // Exclude the current floor surface from triggering wall touch
-      if (wallType !== currentFloorSurface) {
-        const now = Date.now();
-
-        // Clear existing timeout
-        if (wallTouchTimeout.current) {
-          clearTimeout(wallTouchTimeout.current);
-        }
-
-        // Only update if enough time has passed or it's a different wall type
-        if (
-          now - lastWallTouchTime.current > WALL_TOUCH_DEBOUNCE_TIME ||
-          !wallTouchData ||
-          wallTouchData.wallType !== wallType
-        ) {
-          console.log(`Setting wall touch data for: ${wallType}`);
-          wallTouchTimeout.current = setTimeout(() => {
-            setWallTouchData({ wallType, roomId });
-            lastWallTouchTime.current = now;
-          }, 50);
-        }
-      } else {
-        console.log(`Wall collision ignored (current floor): ${wallType}`);
-      }
+      // Use context method to handle wall touch
+      updateWallTouchData(wallType, roomId, currentFloorSurface);
     }
   };
 
@@ -218,20 +188,8 @@ export default function Mage() {
     if (other.rigidBodyObject?.userData?.isWall) {
       const { wallType, roomId } = other.rigidBodyObject.userData;
 
-      // Only clear if this was the active wall touch
-      if (
-        wallTouchData &&
-        wallTouchData.wallType === wallType &&
-        wallTouchData.roomId === roomId
-      ) {
-        if (wallTouchTimeout.current) {
-          clearTimeout(wallTouchTimeout.current);
-        }
-
-        wallTouchTimeout.current = setTimeout(() => {
-          setWallTouchData(null);
-        }, 100);
-      }
+      // Use context method to handle wall touch clearing
+      clearWallTouchData(wallType, roomId);
     }
   };
 
@@ -250,28 +208,28 @@ export default function Mage() {
         break;
       case "top": // Ceiling
         up = new THREE.Vector3(0, -1, 0);
-        forward = new THREE.Vector3(0, 0, -1);
-        right = new THREE.Vector3(-1, 0, 0);
+        forward = new THREE.Vector3(0, 0, -1); // Flipped from floor to account for upside-down orientation
+        right = new THREE.Vector3(-1, 0, 0); // Flipped from floor to account for upside-down orientation
         break;
       case "front": // Front wall
-        up = new THREE.Vector3(0, 0, 1);
-        forward = new THREE.Vector3(0, -1, 0);
+        up = new THREE.Vector3(0, 0, -1);
+        forward = new THREE.Vector3(0, 1, 0); // Fixed: was (0, -1, 0)
         right = new THREE.Vector3(1, 0, 0);
         break;
       case "back": // Back wall
-        up = new THREE.Vector3(0, 0, -1);
-        forward = new THREE.Vector3(0, 1, 0);
-        right = new THREE.Vector3(-1, 0, 0);
+        up = new THREE.Vector3(0, 0, 1);
+        forward = new THREE.Vector3(0, -1, 0); // Fixed: was (0, 1, 0)
+        right = new THREE.Vector3(1, 0, 0); // Fixed: was (-1, 0, 0)
         break;
       case "right": // Right wall
-        up = new THREE.Vector3(1, 0, 0);
+        up = new THREE.Vector3(-1, 0, 0);
         forward = new THREE.Vector3(0, 0, 1);
-        right = new THREE.Vector3(0, -1, 0);
+        right = new THREE.Vector3(0, 1, 0); // Fixed: was (0, -1, 0)
         break;
       case "left": // Left wall
-        up = new THREE.Vector3(-1, 0, 0);
-        forward = new THREE.Vector3(0, 0, -1);
-        right = new THREE.Vector3(0, 1, 0);
+        up = new THREE.Vector3(1, 0, 0);
+        forward = new THREE.Vector3(0, 0, 1); // Fixed: was (0, 0, -1)
+        right = new THREE.Vector3(0, -1, 0); // Fixed: was (0, 1, 0)
         break;
     }
 
@@ -285,34 +243,30 @@ export default function Mage() {
     return { up, forward, right };
   };
 
-  // Handle gravity change confirmation
-  const handleGravityChange = (wallType) => {
-    const directions = {
-      front: [0, 0, 9.8], // gravity towards front wall
-      back: [0, 0, -9.8], // gravity towards back wall
-      right: [9.8, 0, 0], // gravity towards right wall
-      left: [-9.8, 0, 0], // gravity towards left wall
-      top: [0, 9.8, 0], // gravity towards ceiling
-    };
+  // Handle character state transitions when gravity changes
+  const handleCharacterTransition = useCallback((wallType) => {
+    // Handle character state transitions
+    const newSurface = wallType;
+    const newTargetQuaternion = calculateTargetQuaternion(newSurface);
 
-    const newGravity = directions[wallType];
-    if (newGravity) {
-      setCurrentGravity(newGravity);
+    // Update surface quaternions
+    characterState.current.targetSurfaceQuaternion.copy(newTargetQuaternion);
+    characterState.current.isTransitioning = true;
+    characterState.current.transitionProgress = 0;
 
-      // Start surface transition
-      const newSurface = wallType;
-      const newTargetQuaternion = calculateTargetQuaternion(newSurface);
+    // RESET horizontal rotation when changing surfaces (remove persistence)
+    characterState.current.horizontalRotation = 0;
+    characterState.current.currentHorizontalQuaternion.identity();
 
-      // Update surface quaternions
-      characterState.current.targetSurfaceQuaternion.copy(newTargetQuaternion);
-      characterState.current.currentSurface = newSurface;
-      characterState.current.isTransitioning = true;
-      characterState.current.transitionProgress = 0;
+    console.log(
+      `Starting transition to surface: ${newSurface}, reset horizontal rotation`
+    );
+  }, []);
 
-      console.log(`Starting transition to surface: ${newSurface}`);
-    }
-    setWallTouchData(null);
-  };
+  // Register the transition callback with the character context
+  useEffect(() => {
+    registerTransitionCallback(handleCharacterTransition);
+  }, [registerTransitionCallback, handleCharacterTransition]);
 
   // Subscribe to jump key
   useEffect(() => {
@@ -336,17 +290,20 @@ export default function Mage() {
     };
   }, [subscribeKeys]);
 
-  // Expose gravity functions and wall touch data for external UI
-  window.wallTouchData = wallTouchData;
-  window.handleGravityChange = handleGravityChange;
-
   // Function to handle camera collision detection
-  const handleCameraCollision = (characterPosition, idealCameraPosition) => {
-    // Create ray origin at character position with a slight height adjustment
+  const handleCameraCollision = (
+    characterPosition,
+    idealCameraPosition,
+    surfaceNormal
+  ) => {
+    // Create ray origin at character position with surface-relative height adjustment
+    const surfaceRelativeOffset = surfaceNormal
+      .clone()
+      .multiplyScalar(cameraLookAtHeight);
     const rayOrigin = new THREE.Vector3(
-      characterPosition.x,
-      characterPosition.y + cameraLookAtHeight,
-      characterPosition.z
+      characterPosition.x + surfaceRelativeOffset.x,
+      characterPosition.y + surfaceRelativeOffset.y,
+      characterPosition.z + surfaceRelativeOffset.z
     );
 
     // Calculate direction from character to camera
@@ -443,6 +400,7 @@ export default function Mage() {
       let rotationChange = 0;
       if (leftward)
         rotationChange = characterState.current.rotationSpeed * delta;
+
       if (rightward)
         rotationChange = -characterState.current.rotationSpeed * delta;
 
@@ -450,10 +408,7 @@ export default function Mage() {
         characterState.current.horizontalRotation += rotationChange;
 
         // Get the surface's up vector for rotation axis
-        const { up } = getSurfaceVectors(
-          characterState.current.currentSurface,
-          0
-        );
+        const { up } = getSurfaceVectors(currentFloorSurface, 0);
 
         // Create new horizontal rotation quaternion
         characterState.current.currentHorizontalQuaternion.setFromAxisAngle(
@@ -464,9 +419,10 @@ export default function Mage() {
     }
 
     // Calculate final combined quaternion (surface orientation + horizontal rotation)
+    // Apply surface orientation first, then horizontal rotation in surface-local space
     const finalQuaternion =
       characterState.current.currentSurfaceQuaternion.clone();
-    finalQuaternion.multiply(
+    finalQuaternion.premultiply(
       characterState.current.currentHorizontalQuaternion
     );
 
@@ -485,7 +441,7 @@ export default function Mage() {
     if (!characterState.current.isTransitioning) {
       // Calculate movement direction relative to current surface
       const { forward: surfaceForward } = getSurfaceVectors(
-        characterState.current.currentSurface,
+        currentFloorSurface,
         characterState.current.horizontalRotation
       );
 
@@ -538,39 +494,61 @@ export default function Mage() {
       true
     );
 
-    // Calculate ideal camera position (using horizontal rotation for camera)
-    const cameraOffset = new THREE.Vector3(
-      -Math.sin(characterState.current.horizontalRotation) * cameraDistance,
-      cameraHeight,
-      -Math.cos(characterState.current.horizontalRotation) * cameraDistance
+    // Calculate surface-relative camera positioning
+    // Get surface vectors with character's current horizontal rotation
+    const { up: surfaceNormal, forward: surfaceForward } = getSurfaceVectors(
+      currentFloorSurface,
+      characterState.current.horizontalRotation
     );
 
+    // Calculate character's backward direction (opposite of forward on the surface)
+    const characterBackward = surfaceForward.clone().negate();
+
+    // Calculate camera position using: character + (backward * distance) + (normal * height)
+    const backwardOffset = characterBackward
+      .clone()
+      .multiplyScalar(cameraDistance);
+    const normalOffset = surfaceNormal.clone().multiplyScalar(cameraHeight);
+
     const idealCameraPosition = new THREE.Vector3(
-      position.x + cameraOffset.x,
-      position.y + cameraOffset.y,
-      position.z + cameraOffset.z
+      position.x + backwardOffset.x + normalOffset.x,
+      position.y + backwardOffset.y + normalOffset.y,
+      position.z + backwardOffset.z + normalOffset.z
     );
 
     // Check for camera collisions and adjust position if needed
     const collisionAdjustedPosition = handleCameraCollision(
       characterPosition,
-      idealCameraPosition
+      idealCameraPosition,
+      surfaceNormal
     );
 
-    // Calculate target for camera to look at
+    // Set camera up direction based on surface (pointing away from surface)
+    const cameraUpDirection = surfaceNormal.clone();
+
+    // Calculate look-at target (character position with surface-relative height offset)
+    const surfaceRelativeLookAtOffset = surfaceNormal
+      .clone()
+      .multiplyScalar(cameraLookAtHeight);
     const targetLookAt = new THREE.Vector3(
-      position.x,
-      position.y + cameraLookAtHeight,
-      position.z
+      position.x + surfaceRelativeLookAtOffset.x,
+      position.y + surfaceRelativeLookAtOffset.y,
+      position.z + surfaceRelativeLookAtOffset.z
     );
 
     // Smoothly interpolate camera position and target
     smoothedCameraPosition.lerp(collisionAdjustedPosition, 5 * delta);
     smoothedCameraTarget.lerp(targetLookAt, 5 * delta);
 
-    // Update camera
+    // Update camera position and orientation
     state.camera.position.copy(smoothedCameraPosition);
+
+    // Set camera to look at character with correct up direction
     state.camera.lookAt(smoothedCameraTarget);
+    state.camera.up.copy(cameraUpDirection);
+    state.camera.lookAt(smoothedCameraTarget); // Call lookAt again after setting up vector
+
+    console.log(position.y);
   });
 
   return (

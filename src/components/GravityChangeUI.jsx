@@ -1,36 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useCharacter } from "./CharacterContext";
 
 export function GravityChangeUI() {
-  const [wallTouchData, setWallTouchData] = useState(null);
-
-  // Poll for wall touch data from the character component
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (window.wallTouchData !== wallTouchData) {
-        setWallTouchData(window.wallTouchData);
-      }
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [wallTouchData]);
+  const { wallTouchData, handleGravityChange } = useCharacter();
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (
-        e.key.toLowerCase() === "g" &&
-        wallTouchData &&
-        window.handleGravityChange
-      ) {
-        window.handleGravityChange(wallTouchData.wallType);
+      if (e.key.toLowerCase() === "g" && wallTouchData) {
+        console.log(
+          `[GravityChangeUI] G key pressed, triggering gravity change to: ${wallTouchData.wallType}`
+        );
+        handleGravityChange(wallTouchData.wallType);
       }
-      if (e.key === "Escape" && wallTouchData && window.handleGravityCancel) {
-        window.handleGravityCancel();
+      if (e.key === "Escape" && wallTouchData) {
+        // Clear wall touch data on escape
+        // Note: handleGravityCancel functionality can be added to context if needed
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [wallTouchData]);
+  }, [wallTouchData, handleGravityChange]);
 
   if (!wallTouchData) return null;
 
