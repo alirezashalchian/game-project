@@ -9,6 +9,49 @@ import * as THREE from "three";
 import { calculateRoomPosition } from "../utils/roomUtils";
 import { roomConfig } from "./Room/roomConfig";
 
+// Cached surface vectors to reduce memory allocation
+const SURFACE_BASE_VECTORS = {
+  bottom: {
+    up: new THREE.Vector3(0, 1, 0),
+    forward: new THREE.Vector3(0, 0, 1),
+    right: new THREE.Vector3(1, 0, 0),
+  },
+  top: {
+    up: new THREE.Vector3(0, -1, 0),
+    forward: new THREE.Vector3(0, 0, -1),
+    right: new THREE.Vector3(1, 0, 0),
+  },
+  front: {
+    up: new THREE.Vector3(0, 0, -1),
+    forward: new THREE.Vector3(0, 1, 0),
+    right: new THREE.Vector3(1, 0, 0),
+  },
+  back: {
+    up: new THREE.Vector3(0, 0, 1),
+    forward: new THREE.Vector3(0, -1, 0),
+    right: new THREE.Vector3(1, 0, 0),
+  },
+  right: {
+    up: new THREE.Vector3(-1, 0, 0),
+    forward: new THREE.Vector3(0, 0, 1),
+    right: new THREE.Vector3(0, 1, 0),
+  },
+  left: {
+    up: new THREE.Vector3(1, 0, 0),
+    forward: new THREE.Vector3(0, 0, 1),
+    right: new THREE.Vector3(0, -1, 0),
+  },
+};
+
+const SURFACE_UP_VECTORS = {
+  bottom: new THREE.Vector3(0, 1, 0),
+  top: new THREE.Vector3(0, -1, 0),
+  front: new THREE.Vector3(0, 0, -1),
+  back: new THREE.Vector3(0, 0, 1),
+  right: new THREE.Vector3(-1, 0, 0),
+  left: new THREE.Vector3(1, 0, 0),
+};
+
 export default function Mage() {
   const mage = useGLTF("./models/characters/Mage.glb");
   const animations = useAnimations(mage.animations, mage.scene);
@@ -207,45 +250,28 @@ export default function Mage() {
     console.log(`Current floor surface updated to: ${newFloorSurface}`);
   }, [currentGravity]);
 
-  // Surface-relative movement helper function
+  // Surface-relative movement helper function - optimized with cached vectors
   const getSurfaceVectors = (surface, horizontalRotation) => {
-    let up = new THREE.Vector3(0, 1, 0);
-    let forward = new THREE.Vector3(0, 0, 1);
-    let right = new THREE.Vector3(1, 0, 0);
+    const base = SURFACE_BASE_VECTORS[surface];
 
-    // Define surface-relative vectors
-    switch (surface) {
-      case "bottom": // Floor
-        up = new THREE.Vector3(0, 1, 0);
-        forward = new THREE.Vector3(0, 0, 1);
-        right = new THREE.Vector3(1, 0, 0);
-        break;
-      case "top": // Ceiling
-        up = new THREE.Vector3(0, -1, 0);
-        forward = new THREE.Vector3(0, 0, -1); // Flipped from floor to account for upside-down orientation
-        right = new THREE.Vector3(-1, 0, 0); // Changed to (1, 0, 0) as requested
-        break;
-      case "front": // Front wall
-        up = new THREE.Vector3(0, 0, -1);
-        forward = new THREE.Vector3(0, 1, 0); // Fixed: was (0, -1, 0)
-        right = new THREE.Vector3(1, 0, 0);
-        break;
-      case "back": // Back wall
-        up = new THREE.Vector3(0, 0, 1);
-        forward = new THREE.Vector3(0, -1, 0); // Fixed: was (0, 1, 0)
-        right = new THREE.Vector3(1, 0, 0); // Fixed: was (-1, 0, 0)
-        break;
-      case "right": // Right wall
-        up = new THREE.Vector3(-1, 0, 0);
-        forward = new THREE.Vector3(0, 0, 1);
-        right = new THREE.Vector3(0, 1, 0); // Fixed: was (0, -1, 0)
-        break;
-      case "left": // Left wall
-        up = new THREE.Vector3(1, 0, 0);
-        forward = new THREE.Vector3(0, 0, 1); // Fixed: was (0, 0, -1)
-        right = new THREE.Vector3(0, -1, 0); // Fixed: was (0, 1, 0)
-        break;
+    if (!base) {
+      // Fallback to bottom surface if invalid surface provided
+      return SURFACE_BASE_VECTORS.bottom;
     }
+
+    if (horizontalRotation === 0) {
+      // No rotation needed - return cached vectors directly (no cloning required)
+      return {
+        up: base.up,
+        forward: base.forward,
+        right: base.right,
+      };
+    }
+
+    // Only clone when we need to apply rotation to avoid modifying cached vectors
+    const up = base.up; // Up vector never changes, no need to clone
+    const forward = base.forward.clone(); // Clone because we'll modify with rotation
+    const right = base.right.clone(); // Clone because we'll modify with rotation
 
     // Apply horizontal rotation to forward and right vectors
     const rotationQuaternion = new THREE.Quaternion();
@@ -257,24 +283,9 @@ export default function Mage() {
     return { up, forward, right };
   };
 
-  // Helper function to get world "up vector" for a surface
+  // Helper function to get world "up vector" for a surface - optimized with cached vectors
   const getSurfaceUpVector = (surface) => {
-    switch (surface) {
-      case "bottom":
-        return new THREE.Vector3(0, 1, 0); // +Y
-      case "top":
-        return new THREE.Vector3(0, -1, 0); // -Y
-      case "front":
-        return new THREE.Vector3(0, 0, -1); // -Z
-      case "back":
-        return new THREE.Vector3(0, 0, 1); // +Z
-      case "right":
-        return new THREE.Vector3(-1, 0, 0); // -X
-      case "left":
-        return new THREE.Vector3(1, 0, 0); // +X
-      default:
-        return new THREE.Vector3(0, 1, 0);
-    }
+    return SURFACE_UP_VECTORS[surface] || SURFACE_UP_VECTORS.bottom;
   };
 
   // Subscribe to jump key
@@ -732,8 +743,10 @@ export default function Mage() {
     // Apply tilt when collision is detected
     if (tiltAmount > 0) {
       // Calculate the surface's "right" vector from surface orientation only
-      const surfaceRight = new THREE.Vector3(1, 0, 0); // Local "right" direction
-      surfaceRight.applyQuaternion(surfaceOnlyQuaternion); // Transform to world space
+      const { right: surfaceRight } = getSurfaceVectors(
+        currentFloorSurface,
+        characterState.current.horizontalRotation
+      );
 
       // Create tilt rotation around the surface right axis (tilts camera down)
       const tiltQuaternion = new THREE.Quaternion();
