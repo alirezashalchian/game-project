@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls, useAnimations } from "@react-three/drei";
@@ -13,14 +13,7 @@ export default function Mage() {
   const mage = useGLTF("./models/characters/Mage.glb");
   const animations = useAnimations(mage.animations, mage.scene);
   const { updateCurrentRoom, getCurrentRoomCoords } = useRoom();
-  const {
-    currentGravity,
-    updateWallTouchData,
-    clearWallTouchData,
-    registerTransitionCallback,
-  } = useCharacter();
-
-  console.log(mage.animations);
+  const { currentGravity, setCurrentGravity } = useCharacter();
 
   const rigidBodyRef = useRef();
   const mageRef = useRef();
@@ -49,8 +42,8 @@ export default function Mage() {
 
   // Camera settings
   const cameraDistance = 5;
-  const cameraHeight = 3;
-  const cameraLookAtHeight = 1.5;
+  const cameraHeight = 2;
+  const cameraLookAtHeight = 1;
   const cameraCollisionOffset = 0.1; // Distance to keep from walls
 
   // Smoothed camera values
@@ -81,6 +74,17 @@ export default function Mage() {
     // Add surface orientation quaternion
     currentSurfaceQuaternion: new THREE.Quaternion(),
     targetSurfaceQuaternion: new THREE.Quaternion(),
+    // Camera pause during surface transitions
+    cameraPaused: false,
+    cameraPauseTimer: 0,
+    cameraPauseDuration: 2.0, // 2 seconds
+    pausedCameraPosition: new THREE.Vector3(),
+    pausedCameraTarget: new THREE.Vector3(),
+    pausedCameraUp: new THREE.Vector3(),
+    // Gravity change cooldown
+    gravityCooldown: false,
+    gravityCooldownTimer: 0,
+    gravityCooldownDuration: 2.1, // 2.1 seconds
   });
 
   // Helper function to calculate target quaternion for new surface
@@ -131,6 +135,41 @@ export default function Mage() {
     return targetQuaternion;
   };
 
+  // Helper function to get target gravity from character's facing direction
+  const getTargetGravityFromCharacterFacing = () => {
+    // Get character's current world-space forward direction
+    const currentQuaternion =
+      characterState.current.currentSurfaceQuaternion.clone();
+    currentQuaternion.premultiply(
+      characterState.current.currentHorizontalQuaternion
+    );
+
+    const forward = new THREE.Vector3(0, 0, 1);
+    forward.applyQuaternion(currentQuaternion);
+
+    // Find dominant axis
+    const absX = Math.abs(forward.x);
+    const absY = Math.abs(forward.y);
+    const absZ = Math.abs(forward.z);
+
+    if (absX > absY && absX > absZ) {
+      return {
+        gravity: forward.x > 0 ? [9.8, 0, 0] : [-9.8, 0, 0],
+        surface: forward.x > 0 ? "right" : "left",
+      };
+    } else if (absY > absX && absY > absZ) {
+      return {
+        gravity: forward.y > 0 ? [0, 9.8, 0] : [0, -9.8, 0],
+        surface: forward.y > 0 ? "top" : "bottom",
+      };
+    } else {
+      return {
+        gravity: forward.z > 0 ? [0, 0, 9.8] : [0, 0, -9.8],
+        surface: forward.z > 0 ? "front" : "back",
+      };
+    }
+  };
+
   // Display current room coordinates for debugging
   useEffect(() => {
     const currentCoords = getCurrentRoomCoords();
@@ -168,31 +207,6 @@ export default function Mage() {
     console.log(`Current floor surface updated to: ${newFloorSurface}`);
   }, [currentGravity]);
 
-  // Handle wall collision for gravity change
-  const handleCollisionEnter = ({ other }) => {
-    // Check if we collided with a wall
-    if (other.rigidBodyObject?.userData?.isWall) {
-      const { wallType, roomId } = other.rigidBodyObject.userData;
-      console.log(
-        `Collision with wall: ${wallType}, Current floor: ${currentFloorSurface}`
-      );
-
-      // Use context method to handle wall touch
-      updateWallTouchData(wallType, roomId, currentFloorSurface);
-    }
-  };
-
-  // Handle wall collision exit
-  const handleCollisionExit = ({ other }) => {
-    // Check if we stopped colliding with a wall
-    if (other.rigidBodyObject?.userData?.isWall) {
-      const { wallType, roomId } = other.rigidBodyObject.userData;
-
-      // Use context method to handle wall touch clearing
-      clearWallTouchData(wallType, roomId);
-    }
-  };
-
   // Surface-relative movement helper function
   const getSurfaceVectors = (surface, horizontalRotation) => {
     let up = new THREE.Vector3(0, 1, 0);
@@ -209,7 +223,7 @@ export default function Mage() {
       case "top": // Ceiling
         up = new THREE.Vector3(0, -1, 0);
         forward = new THREE.Vector3(0, 0, -1); // Flipped from floor to account for upside-down orientation
-        right = new THREE.Vector3(-1, 0, 0); // Flipped from floor to account for upside-down orientation
+        right = new THREE.Vector3(-1, 0, 0); // Changed to (1, 0, 0) as requested
         break;
       case "front": // Front wall
         up = new THREE.Vector3(0, 0, -1);
@@ -243,30 +257,25 @@ export default function Mage() {
     return { up, forward, right };
   };
 
-  // Handle character state transitions when gravity changes
-  const handleCharacterTransition = useCallback((wallType) => {
-    // Handle character state transitions
-    const newSurface = wallType;
-    const newTargetQuaternion = calculateTargetQuaternion(newSurface);
-
-    // Update surface quaternions
-    characterState.current.targetSurfaceQuaternion.copy(newTargetQuaternion);
-    characterState.current.isTransitioning = true;
-    characterState.current.transitionProgress = 0;
-
-    // RESET horizontal rotation when changing surfaces (remove persistence)
-    characterState.current.horizontalRotation = 0;
-    characterState.current.currentHorizontalQuaternion.identity();
-
-    console.log(
-      `Starting transition to surface: ${newSurface}, reset horizontal rotation`
-    );
-  }, []);
-
-  // Register the transition callback with the character context
-  useEffect(() => {
-    registerTransitionCallback(handleCharacterTransition);
-  }, [registerTransitionCallback, handleCharacterTransition]);
+  // Helper function to get world "up vector" for a surface
+  const getSurfaceUpVector = (surface) => {
+    switch (surface) {
+      case "bottom":
+        return new THREE.Vector3(0, 1, 0); // +Y
+      case "top":
+        return new THREE.Vector3(0, -1, 0); // -Y
+      case "front":
+        return new THREE.Vector3(0, 0, -1); // -Z
+      case "back":
+        return new THREE.Vector3(0, 0, 1); // +Z
+      case "right":
+        return new THREE.Vector3(-1, 0, 0); // -X
+      case "left":
+        return new THREE.Vector3(1, 0, 0); // +X
+      default:
+        return new THREE.Vector3(0, 1, 0);
+    }
+  };
 
   // Subscribe to jump key
   useEffect(() => {
@@ -289,6 +298,121 @@ export default function Mage() {
       }
     };
   }, [subscribeKeys]);
+
+  // Subscribe to gravity change key (G)
+  useEffect(() => {
+    const unsubscribeG = subscribeKeys(
+      (state) => state.gravityChange,
+      (pressed) => {
+        if (pressed) {
+          // Check if gravity change is on cooldown
+          if (characterState.current.gravityCooldown) {
+            console.log("Gravity change on cooldown - ignoring G press");
+            return;
+          }
+
+          // Start gravity change cooldown
+          characterState.current.gravityCooldown = true;
+          characterState.current.gravityCooldownTimer = 0;
+          console.log("Starting gravity change cooldown");
+
+          // STEP 1: Get the "up vector" from the current surface (before transition)
+          const fromSurfaceUpVector = getSurfaceUpVector(currentFloorSurface);
+
+          // STEP 2: Get target direction from character's facing
+          const { gravity, surface } = getTargetGravityFromCharacterFacing();
+
+          console.log(
+            `G pressed: transitioning from ${currentFloorSurface} to ${surface}, gravity: [${gravity}]`
+          );
+          console.log(`From surface up vector:`, fromSurfaceUpVector);
+
+          // STEP 3: Change gravity immediately
+          setCurrentGravity(gravity);
+
+          // STEP 4: Apply new surface quaternion
+          const newSurfaceQuaternion = calculateTargetQuaternion(surface);
+          characterState.current.currentSurfaceQuaternion.copy(
+            newSurfaceQuaternion
+          );
+          characterState.current.targetSurfaceQuaternion.copy(
+            newSurfaceQuaternion
+          );
+
+          // STEP 5: Calculate horizontal rotation to face the "from surface up vector"
+          // We want the character to face the fromSurfaceUpVector direction on the new surface
+
+          // Get the surface vectors for the new surface
+          const { up: newSurfaceUp, forward: newDefaultForward } =
+            getSurfaceVectors(surface, 0);
+
+          console.log(`New surface up:`, newSurfaceUp);
+          console.log(`New surface default forward:`, newDefaultForward);
+
+          // Project the target world direction onto the new surface's horizontal plane
+          // Remove any component along the surface normal (up direction)
+          const projectedTarget = fromSurfaceUpVector.clone();
+          const normalComponent = projectedTarget.dot(newSurfaceUp);
+          projectedTarget.addScaledVector(newSurfaceUp, -normalComponent);
+
+          console.log(`Projected target on new surface:`, projectedTarget);
+          console.log(`Projected target length:`, projectedTarget.length());
+
+          // Check if target direction is not perpendicular to the surface
+          if (projectedTarget.length() > 0.001) {
+            projectedTarget.normalize();
+
+            // Calculate the angle between the default forward and our target direction
+            // on the new surface's horizontal plane
+            const dotProduct = newDefaultForward.dot(projectedTarget);
+            const crossProduct = newDefaultForward
+              .clone()
+              .cross(projectedTarget);
+            const angle = Math.atan2(
+              crossProduct.dot(newSurfaceUp),
+              dotProduct
+            );
+
+            console.log(
+              `Calculated angle:`,
+              angle,
+              `(${((angle * 180) / Math.PI).toFixed(1)} degrees)`
+            );
+
+            // Set the new horizontal rotation
+            characterState.current.horizontalRotation = angle;
+            characterState.current.currentHorizontalQuaternion.setFromAxisAngle(
+              newSurfaceUp,
+              angle
+            );
+          } else {
+            // Target direction is perpendicular to surface - no meaningful horizontal direction
+            console.log(
+              `Target direction is perpendicular to surface, setting rotation to 0`
+            );
+            characterState.current.horizontalRotation = 0;
+            characterState.current.currentHorizontalQuaternion.identity();
+          }
+
+          // Trigger camera pause for 2 seconds during surface transition
+          characterState.current.cameraPaused = true;
+          characterState.current.cameraPauseTimer = 0;
+          console.log(
+            "Camera pause started - will capture camera state in next frame"
+          );
+
+          // Ensure not transitioning (since change is instant)
+          characterState.current.isTransitioning = false;
+        }
+      }
+    );
+
+    return () => {
+      if (typeof unsubscribeG === "function") {
+        unsubscribeG();
+      }
+    };
+  }, [subscribeKeys, setCurrentGravity, currentGravity, currentFloorSurface]);
 
   // Function to handle camera collision detection
   const handleCameraCollision = (
@@ -321,7 +445,7 @@ export default function Mage() {
 
     const hit = world.castRay(ray, distanceToCamera, true);
 
-    // If we hit something, adjust camera position
+    // If we hit something, adjust camera position and calculate tilt
     if (hit && hit.timeOfImpact < distanceToCamera) {
       // Calculate adjusted position at hit point minus a small offset to avoid clipping
       const adjustedDistance = hit.timeOfImpact - cameraCollisionOffset;
@@ -331,11 +455,23 @@ export default function Mage() {
       adjustedPosition.copy(rayOrigin);
       adjustedPosition.addScaledVector(rayDirection, adjustedDistance);
 
-      return adjustedPosition;
+      // Calculate tilt amount based on how much we had to pull the camera closer
+      const distanceReduction = distanceToCamera - adjustedDistance;
+      const maxTiltAngle = Math.PI / 12; // 15 degrees max tilt
+      const tiltAmount =
+        Math.min(distanceReduction / cameraDistance, 1.0) * maxTiltAngle;
+
+      return {
+        position: adjustedPosition,
+        tilt: tiltAmount,
+      };
     }
 
-    // No collision, return ideal position
-    return idealCameraPosition;
+    // No collision, return ideal position with no tilt
+    return {
+      position: idealCameraPosition,
+      tilt: 0,
+    };
   };
 
   // Function to smoothly play a new animation
@@ -362,6 +498,46 @@ export default function Mage() {
 
     // Update current room based on character position
     updateCurrentRoom([position.x, position.y, position.z]);
+
+    // Update camera pause timer
+    if (characterState.current.cameraPaused) {
+      if (characterState.current.cameraPauseTimer === 0) {
+        // First frame of pause - capture current smoothed camera state
+        characterState.current.pausedCameraPosition.copy(
+          smoothedCameraPosition
+        );
+        characterState.current.pausedCameraTarget.copy(smoothedCameraTarget);
+        characterState.current.pausedCameraUp.copy(state.camera.up);
+        console.log("Captured smoothed camera state and starting freeze");
+      }
+
+      characterState.current.cameraPauseTimer += delta;
+
+      if (
+        characterState.current.cameraPauseTimer >=
+        characterState.current.cameraPauseDuration
+      ) {
+        // End pause
+        characterState.current.cameraPaused = false;
+        characterState.current.cameraPauseTimer = 0;
+        console.log("Camera pause ended - resuming normal camera behavior");
+      }
+    }
+
+    // Update gravity change cooldown timer
+    if (characterState.current.gravityCooldown) {
+      characterState.current.gravityCooldownTimer += delta;
+
+      if (
+        characterState.current.gravityCooldownTimer >=
+        characterState.current.gravityCooldownDuration
+      ) {
+        // End cooldown
+        characterState.current.gravityCooldown = false;
+        characterState.current.gravityCooldownTimer = 0;
+        console.log("Gravity change cooldown ended - G key available");
+      }
+    }
 
     const { forward, backward, leftward, rightward } = getKeys();
 
@@ -485,24 +661,39 @@ export default function Mage() {
     }
 
     // Apply gravity force each frame (using current gravity direction)
+    const gravityStrength = 5;
     rigidBodyRef.current.applyImpulse(
       {
-        x: currentGravity[0] * delta,
-        y: currentGravity[1] * delta,
-        z: currentGravity[2] * delta,
+        x: currentGravity[0] * delta * gravityStrength,
+        y: currentGravity[1] * delta * gravityStrength,
+        z: currentGravity[2] * delta * gravityStrength,
       },
       true
     );
 
     // Calculate surface-relative camera positioning
-    // Get surface vectors with character's current horizontal rotation
-    const { up: surfaceNormal, forward: surfaceForward } = getSurfaceVectors(
-      currentFloorSurface,
+    // Use ONLY surface orientation (not character facing) for camera positioning
+    const surfaceOnlyQuaternion =
+      characterState.current.currentSurfaceQuaternion.clone();
+
+    // Derive surface coordinate system from surface orientation only
+    const surfaceNormal = new THREE.Vector3(0, 1, 0); // Local "up" direction
+    surfaceNormal.applyQuaternion(surfaceOnlyQuaternion); // Transform to world space
+
+    const surfaceForward = new THREE.Vector3(0, 0, 1); // Local "forward" direction
+    surfaceForward.applyQuaternion(surfaceOnlyQuaternion); // Transform to world space
+
+    // Apply horizontal rotation to forward direction only (for character facing)
+    const characterForward = surfaceForward.clone();
+    const horizontalQuaternion = new THREE.Quaternion();
+    horizontalQuaternion.setFromAxisAngle(
+      surfaceNormal,
       characterState.current.horizontalRotation
     );
+    characterForward.applyQuaternion(horizontalQuaternion);
 
-    // Calculate character's backward direction (opposite of forward on the surface)
-    const characterBackward = surfaceForward.clone().negate();
+    // Calculate character's backward direction (opposite of character's facing on the surface)
+    const characterBackward = characterForward.clone().negate();
 
     // Calculate camera position using: character + (backward * distance) + (normal * height)
     const backwardOffset = characterBackward
@@ -517,11 +708,13 @@ export default function Mage() {
     );
 
     // Check for camera collisions and adjust position if needed
-    const collisionAdjustedPosition = handleCameraCollision(
+    const collisionResult = handleCameraCollision(
       characterPosition,
       idealCameraPosition,
       surfaceNormal
     );
+    const collisionAdjustedPosition = collisionResult.position;
+    const tiltAmount = collisionResult.tilt;
 
     // Set camera up direction based on surface (pointing away from surface)
     const cameraUpDirection = surfaceNormal.clone();
@@ -530,25 +723,53 @@ export default function Mage() {
     const surfaceRelativeLookAtOffset = surfaceNormal
       .clone()
       .multiplyScalar(cameraLookAtHeight);
-    const targetLookAt = new THREE.Vector3(
+    let targetLookAt = new THREE.Vector3(
       position.x + surfaceRelativeLookAtOffset.x,
       position.y + surfaceRelativeLookAtOffset.y,
       position.z + surfaceRelativeLookAtOffset.z
     );
 
-    // Smoothly interpolate camera position and target
-    smoothedCameraPosition.lerp(collisionAdjustedPosition, 5 * delta);
-    smoothedCameraTarget.lerp(targetLookAt, 5 * delta);
+    // Apply tilt when collision is detected
+    if (tiltAmount > 0) {
+      // Calculate the surface's "right" vector from surface orientation only
+      const surfaceRight = new THREE.Vector3(1, 0, 0); // Local "right" direction
+      surfaceRight.applyQuaternion(surfaceOnlyQuaternion); // Transform to world space
+
+      // Create tilt rotation around the surface right axis (tilts camera down)
+      const tiltQuaternion = new THREE.Quaternion();
+      tiltQuaternion.setFromAxisAngle(surfaceRight, tiltAmount);
+
+      // Apply tilt to the look-at direction
+      const lookAtDirection = new THREE.Vector3();
+      lookAtDirection.subVectors(targetLookAt, collisionAdjustedPosition);
+      lookAtDirection.applyQuaternion(tiltQuaternion);
+
+      // Update the tilted look-at target
+      targetLookAt = collisionAdjustedPosition.clone().add(lookAtDirection);
+    }
 
     // Update camera position and orientation
-    state.camera.position.copy(smoothedCameraPosition);
+    if (characterState.current.cameraPaused) {
+      // During pause, keep camera frozen at the stored smoothed position/orientation
+      state.camera.position.copy(characterState.current.pausedCameraPosition);
+      state.camera.lookAt(characterState.current.pausedCameraTarget);
+      state.camera.up.copy(characterState.current.pausedCameraUp);
+      state.camera.lookAt(characterState.current.pausedCameraTarget); // Call lookAt again after setting up vector
+    } else {
+      // Normal camera behavior - smoothly interpolate camera position and target
+      smoothedCameraPosition.lerp(collisionAdjustedPosition, 5 * delta);
+      smoothedCameraTarget.lerp(targetLookAt, 5 * delta);
 
-    // Set camera to look at character with correct up direction
-    state.camera.lookAt(smoothedCameraTarget);
-    state.camera.up.copy(cameraUpDirection);
-    state.camera.lookAt(smoothedCameraTarget); // Call lookAt again after setting up vector
+      // Update camera position and orientation
+      state.camera.position.copy(smoothedCameraPosition);
 
-    console.log(position.y);
+      // Set camera to look at character with correct up direction
+      state.camera.lookAt(smoothedCameraTarget);
+      state.camera.up.copy(cameraUpDirection);
+      state.camera.lookAt(smoothedCameraTarget); // Call lookAt again after setting up vector
+    }
+
+    // console.log(position);
   });
 
   return (
@@ -563,8 +784,6 @@ export default function Mage() {
       linearDamping={0.5}
       angularDamping={0.5}
       userData={{ isCharacter: true }}
-      onCollisionEnter={handleCollisionEnter}
-      onCollisionExit={handleCollisionExit}
     >
       <CapsuleCollider
         ref={capsuleRef}
