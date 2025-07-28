@@ -62,6 +62,11 @@ export default function Mage() {
   const mageRef = useRef();
   const capsuleRef = useRef();
   const currentActionRef = useRef(null);
+  const fallingStateRef = useRef({
+    isFalling: false,
+    fallingFrames: 0,
+    requiredFrames: 3, // Require 3 consecutive frames of falling before animation
+  });
 
   // Get keyboard controls using drei's system
   const [subscribeKeys, getKeys] = useKeyboardControls();
@@ -317,15 +322,15 @@ export default function Mage() {
       (pressed) => {
         if (pressed) {
           // Check if gravity change is on cooldown
-          if (characterState.current.gravityCooldown) {
-            console.log("Gravity change on cooldown - ignoring G press");
-            return;
-          }
+          // if (characterState.current.gravityCooldown) {
+          //   console.log("Gravity change on cooldown - ignoring G press");
+          //   return;
+          // }
 
           // Start gravity change cooldown
-          characterState.current.gravityCooldown = true;
-          characterState.current.gravityCooldownTimer = 0;
-          console.log("Starting gravity change cooldown");
+          // characterState.current.gravityCooldown = true;
+          // characterState.current.gravityCooldownTimer = 0;
+          // console.log("Starting gravity change cooldown");
 
           // STEP 1: Get the "up vector" from the current surface (before transition)
           const fromSurfaceUpVector = getSurfaceUpVector(currentFloorSurface);
@@ -536,24 +541,58 @@ export default function Mage() {
     }
 
     // Update gravity change cooldown timer
-    if (characterState.current.gravityCooldown) {
-      characterState.current.gravityCooldownTimer += delta;
+    // if (characterState.current.gravityCooldown) {
+    //   characterState.current.gravityCooldownTimer += delta;
 
-      if (
-        characterState.current.gravityCooldownTimer >=
-        characterState.current.gravityCooldownDuration
-      ) {
-        // End cooldown
-        characterState.current.gravityCooldown = false;
-        characterState.current.gravityCooldownTimer = 0;
-        console.log("Gravity change cooldown ended - G key available");
-      }
-    }
+    //   if (
+    //     characterState.current.gravityCooldownTimer >=
+    //     characterState.current.gravityCooldownDuration
+    //   ) {
+    //     // End cooldown
+    //     characterState.current.gravityCooldown = false;
+    //     characterState.current.gravityCooldownTimer = 0;
+    //     console.log("Gravity change cooldown ended - G key available");
+    //   }
+    // }
 
     const { forward, backward, leftward, rightward } = getKeys();
 
-    // Handle animation switching
-    if (forward) {
+    // Check if character is falling (velocity-based detection)
+    const currentVel = rigidBodyRef.current.linvel();
+    const velocityVector = new THREE.Vector3(
+      currentVel.x,
+      currentVel.y,
+      currentVel.z
+    );
+
+    // Normalize gravity direction for comparison
+    const gravityDirection = new THREE.Vector3(...currentGravity).normalize();
+
+    // Calculate velocity component in gravity direction
+    const fallingVelocity = velocityVector.dot(gravityDirection);
+
+    // Threshold for determining if character is falling
+    // Lowered threshold since the oscillating values show normal values are 0.4-1.0
+    const fallingThreshold = 1.5;
+    const isCurrentlyFalling = fallingVelocity > fallingThreshold;
+
+    // Update falling state with persistence check
+    if (isCurrentlyFalling) {
+      fallingStateRef.current.fallingFrames++;
+    } else {
+      fallingStateRef.current.fallingFrames = 0;
+    }
+
+    // Only consider "falling" if it persists for required frames
+    const persistentFalling =
+      fallingStateRef.current.fallingFrames >=
+      fallingStateRef.current.requiredFrames;
+    fallingStateRef.current.isFalling = persistentFalling;
+
+    // Handle animation switching (persistent falling has priority)
+    if (persistentFalling) {
+      playAction(animations.actions.Jump_Idle);
+    } else if (forward) {
       playAction(animations.actions.Running_A);
     } else if (backward) {
       playAction(animations.actions.Walking_Backwards);
@@ -763,11 +802,11 @@ export default function Mage() {
 
     // Update camera position and orientation
     if (characterState.current.cameraPaused) {
-      // During pause, keep camera frozen at the stored smoothed position/orientation
+      // During pause, keep camera frozen at the stored smoothed position but look at character
       state.camera.position.copy(characterState.current.pausedCameraPosition);
-      state.camera.lookAt(characterState.current.pausedCameraTarget);
+      state.camera.lookAt(characterPosition);
       state.camera.up.copy(characterState.current.pausedCameraUp);
-      state.camera.lookAt(characterState.current.pausedCameraTarget); // Call lookAt again after setting up vector
+      state.camera.lookAt(characterPosition); // Call lookAt again after setting up vector
     } else {
       // Normal camera behavior - smoothly interpolate camera position and target
       smoothedCameraPosition.lerp(collisionAdjustedPosition, 5 * delta);
