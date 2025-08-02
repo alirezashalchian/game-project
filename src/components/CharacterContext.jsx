@@ -6,12 +6,17 @@ export function CharacterProvider({ children }) {
   // Current gravity state
   const [currentGravity, setCurrentGravity] = useState([0, -9.8, 0]);
 
+  // Current floor surface state (which surface the character is walking on)
+  const [currentFloorSurface, setCurrentFloorSurface] = useState("bottom");
+
   const value = {
     // State
     currentGravity,
+    currentFloorSurface,
 
     // Actions
     setCurrentGravity,
+    setCurrentFloorSurface,
   };
 
   return (
@@ -20,7 +25,6 @@ export function CharacterProvider({ children }) {
     </CharacterContext.Provider>
   );
 }
-
 export const useCharacter = () => {
   const context = useContext(CharacterContext);
   if (!context) {
