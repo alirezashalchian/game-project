@@ -3,7 +3,7 @@ import { getCoordsFromRoomId, isPhantomRoom } from "../../utils/roomUtils";
 export const roomConfig = {
   innerSize: 15, // The inner space of the room (15x15x15)
   wallThickness: 0.5, // Thickness of the walls
-  doorSize: 2.5, // Size of the door opening in each wall (reduced to half)
+  doorSize: 3, // Size of the door opening in each wall (reduced to half)
   wallColors: {
     front: "#607D8B", // Blue-gray
     back: "#607D8B",
