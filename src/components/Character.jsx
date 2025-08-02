@@ -8,55 +8,23 @@ import { useCharacter } from "./CharacterContext";
 import * as THREE from "three";
 import { calculateRoomPosition } from "../utils/roomUtils";
 import { roomConfig } from "./Room/roomConfig";
-
-// Cached surface vectors to reduce memory allocation
-const SURFACE_BASE_VECTORS = {
-  bottom: {
-    up: new THREE.Vector3(0, 1, 0),
-    forward: new THREE.Vector3(0, 0, 1),
-    right: new THREE.Vector3(1, 0, 0),
-  },
-  top: {
-    up: new THREE.Vector3(0, -1, 0),
-    forward: new THREE.Vector3(0, 0, -1),
-    right: new THREE.Vector3(1, 0, 0),
-  },
-  front: {
-    up: new THREE.Vector3(0, 0, -1),
-    forward: new THREE.Vector3(0, 1, 0),
-    right: new THREE.Vector3(1, 0, 0),
-  },
-  back: {
-    up: new THREE.Vector3(0, 0, 1),
-    forward: new THREE.Vector3(0, -1, 0),
-    right: new THREE.Vector3(1, 0, 0),
-  },
-  right: {
-    up: new THREE.Vector3(-1, 0, 0),
-    forward: new THREE.Vector3(0, 0, 1),
-    right: new THREE.Vector3(0, 1, 0),
-  },
-  left: {
-    up: new THREE.Vector3(1, 0, 0),
-    forward: new THREE.Vector3(0, 0, 1),
-    right: new THREE.Vector3(0, -1, 0),
-  },
-};
-
-const SURFACE_UP_VECTORS = {
-  bottom: new THREE.Vector3(0, 1, 0),
-  top: new THREE.Vector3(0, -1, 0),
-  front: new THREE.Vector3(0, 0, -1),
-  back: new THREE.Vector3(0, 0, 1),
-  right: new THREE.Vector3(-1, 0, 0),
-  left: new THREE.Vector3(1, 0, 0),
-};
+import {
+  getSurfaceUpVector,
+  getSurfaceVectors,
+  getFloorSurfaceFromGravity,
+  calculateTargetQuaternion,
+} from "../utils/surfaceUtils";
 
 export default function Mage() {
   const mage = useGLTF("./models/characters/Mage.glb");
   const animations = useAnimations(mage.animations, mage.scene);
   const { updateCurrentRoom, getCurrentRoomCoords } = useRoom();
-  const { currentGravity, setCurrentGravity } = useCharacter();
+  const {
+    currentGravity,
+    setCurrentGravity,
+    currentFloorSurface,
+    setCurrentFloorSurface,
+  } = useCharacter();
 
   const rigidBodyRef = useRef();
   const mageRef = useRef();
@@ -101,8 +69,7 @@ export default function Mage() {
 
   const [smoothedCameraTarget] = useState(() => new THREE.Vector3());
 
-  // Track which surface is currently the floor based on gravity direction
-  const [currentFloorSurface, setCurrentFloorSurface] = useState("bottom");
+  // Track which surface is currently the floor based on gravity direction (now from context)
 
   // Character state - UPDATED to use quaternions
   const characterState = useRef({
@@ -129,59 +96,7 @@ export default function Mage() {
     pausedCameraPosition: new THREE.Vector3(),
     pausedCameraTarget: new THREE.Vector3(),
     pausedCameraUp: new THREE.Vector3(),
-    // Gravity change cooldown
-    gravityCooldown: false,
-    gravityCooldownTimer: 0,
-    gravityCooldownDuration: 2.1, // 2.1 seconds
   });
-
-  // Helper function to calculate target quaternion for new surface
-  const calculateTargetQuaternion = (newSurface) => {
-    const targetQuaternion = new THREE.Quaternion();
-
-    switch (newSurface) {
-      // -Y surface = bottom
-      case "bottom": // Floor - no rotation needed
-        targetQuaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0);
-        break;
-      // +Y surface = top
-      case "top": // Ceiling - rotate 180 degrees around X axis
-        targetQuaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
-        break;
-      // +Z surface = front
-      case "front": // Front wall - rotate 90 degrees around X axis
-        targetQuaternion.setFromAxisAngle(
-          new THREE.Vector3(1, 0, 0),
-          -Math.PI / 2
-        );
-        break;
-      // -Z surface = back
-      case "back": // Back wall - rotate 90 degrees around X axis (opposite direction)
-        targetQuaternion.setFromAxisAngle(
-          new THREE.Vector3(1, 0, 0),
-          Math.PI / 2
-        );
-        break;
-      // +X surface = left
-      case "left": // left wall - rotate 90 degrees around Z axis
-        targetQuaternion.setFromAxisAngle(
-          new THREE.Vector3(0, 0, 1),
-          -Math.PI / 2
-        );
-        break;
-      // -X surface = right
-      case "right": // Right wall - rotate 90 degrees around Z axis (opposite direction)
-        targetQuaternion.setFromAxisAngle(
-          new THREE.Vector3(0, 0, 1),
-          Math.PI / 2
-        );
-        break;
-      default:
-        targetQuaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0);
-    }
-
-    return targetQuaternion;
-  };
 
   // Helper function to get target gravity from character's facing direction
   const getTargetGravityFromCharacterFacing = () => {
@@ -224,74 +139,12 @@ export default function Mage() {
     console.log("Current room coordinates:", currentCoords);
   }, [getCurrentRoomCoords]);
 
-  // Function to determine which surface is the floor based on gravity direction
-  const getFloorSurfaceFromGravity = (gravity) => {
-    const [x, y, z] = gravity;
-
-    // Check which component has the highest absolute value (dominant direction)
-    const absX = Math.abs(x);
-    const absY = Math.abs(y);
-    const absZ = Math.abs(z);
-
-    if (absY > absX && absY > absZ) {
-      // Y-axis dominant
-      return y < 0 ? "bottom" : "top";
-    } else if (absX > absY && absX > absZ) {
-      // X-axis dominant
-      return x < 0 ? "left" : "right";
-    } else if (absZ > absY && absZ > absX) {
-      // Z-axis dominant
-      return z < 0 ? "back" : "front";
-    }
-
-    // Default fallback
-    return "bottom";
-  };
-
   // Update current floor surface whenever gravity changes
   useEffect(() => {
     const newFloorSurface = getFloorSurfaceFromGravity(currentGravity);
     setCurrentFloorSurface(newFloorSurface);
     console.log(`Current floor surface updated to: ${newFloorSurface}`);
-  }, [currentGravity]);
-
-  // Surface-relative movement helper function - optimized with cached vectors
-  const getSurfaceVectors = (surface, horizontalRotation) => {
-    const base = SURFACE_BASE_VECTORS[surface];
-
-    if (!base) {
-      // Fallback to bottom surface if invalid surface provided
-      return SURFACE_BASE_VECTORS.bottom;
-    }
-
-    if (horizontalRotation === 0) {
-      // No rotation needed - return cached vectors directly (no cloning required)
-      return {
-        up: base.up,
-        forward: base.forward,
-        right: base.right,
-      };
-    }
-
-    // Only clone when we need to apply rotation to avoid modifying cached vectors
-    const up = base.up; // Up vector never changes, no need to clone
-    const forward = base.forward.clone(); // Clone because we'll modify with rotation
-    const right = base.right.clone(); // Clone because we'll modify with rotation
-
-    // Apply horizontal rotation to forward and right vectors
-    const rotationQuaternion = new THREE.Quaternion();
-    rotationQuaternion.setFromAxisAngle(up, horizontalRotation);
-
-    forward.applyQuaternion(rotationQuaternion);
-    right.applyQuaternion(rotationQuaternion);
-
-    return { up, forward, right };
-  };
-
-  // Helper function to get world "up vector" for a surface - optimized with cached vectors
-  const getSurfaceUpVector = (surface) => {
-    return SURFACE_UP_VECTORS[surface] || SURFACE_UP_VECTORS.bottom;
-  };
+  }, [currentGravity, setCurrentFloorSurface]);
 
   // Subscribe to jump key
   useEffect(() => {
@@ -321,30 +174,15 @@ export default function Mage() {
       (state) => state.gravityChange,
       (pressed) => {
         if (pressed) {
-          // Check if gravity change is on cooldown
-          // if (characterState.current.gravityCooldown) {
-          //   console.log("Gravity change on cooldown - ignoring G press");
-          //   return;
-          // }
-
-          // Start gravity change cooldown
-          // characterState.current.gravityCooldown = true;
-          // characterState.current.gravityCooldownTimer = 0;
-          // console.log("Starting gravity change cooldown");
-
           // STEP 1: Get the "up vector" from the current surface (before transition)
           const fromSurfaceUpVector = getSurfaceUpVector(currentFloorSurface);
 
           // STEP 2: Get target direction from character's facing
           const { gravity, surface } = getTargetGravityFromCharacterFacing();
 
-          console.log(
-            `G pressed: transitioning from ${currentFloorSurface} to ${surface}, gravity: [${gravity}]`
-          );
-          console.log(`From surface up vector:`, fromSurfaceUpVector);
-
           // STEP 3: Change gravity immediately
           setCurrentGravity(gravity);
+          setCurrentFloorSurface(surface);
 
           // STEP 4: Apply new surface quaternion
           const newSurfaceQuaternion = calculateTargetQuaternion(surface);
@@ -362,17 +200,11 @@ export default function Mage() {
           const { up: newSurfaceUp, forward: newDefaultForward } =
             getSurfaceVectors(surface, 0);
 
-          console.log(`New surface up:`, newSurfaceUp);
-          console.log(`New surface default forward:`, newDefaultForward);
-
           // Project the target world direction onto the new surface's horizontal plane
           // Remove any component along the surface normal (up direction)
           const projectedTarget = fromSurfaceUpVector.clone();
           const normalComponent = projectedTarget.dot(newSurfaceUp);
           projectedTarget.addScaledVector(newSurfaceUp, -normalComponent);
-
-          console.log(`Projected target on new surface:`, projectedTarget);
-          console.log(`Projected target length:`, projectedTarget.length());
 
           // Check if target direction is not perpendicular to the surface
           if (projectedTarget.length() > 0.001) {
@@ -388,13 +220,6 @@ export default function Mage() {
               crossProduct.dot(newSurfaceUp),
               dotProduct
             );
-
-            console.log(
-              `Calculated angle:`,
-              angle,
-              `(${((angle * 180) / Math.PI).toFixed(1)} degrees)`
-            );
-
             // Set the new horizontal rotation
             characterState.current.horizontalRotation = angle;
             characterState.current.currentHorizontalQuaternion.setFromAxisAngle(
@@ -403,9 +228,6 @@ export default function Mage() {
             );
           } else {
             // Target direction is perpendicular to surface - no meaningful horizontal direction
-            console.log(
-              `Target direction is perpendicular to surface, setting rotation to 0`
-            );
             characterState.current.horizontalRotation = 0;
             characterState.current.currentHorizontalQuaternion.identity();
           }
@@ -413,9 +235,6 @@ export default function Mage() {
           // Trigger camera pause for 2 seconds during surface transition
           characterState.current.cameraPaused = true;
           characterState.current.cameraPauseTimer = 0;
-          console.log(
-            "Camera pause started - will capture camera state in next frame"
-          );
 
           // Ensure not transitioning (since change is instant)
           characterState.current.isTransitioning = false;
@@ -428,7 +247,13 @@ export default function Mage() {
         unsubscribeG();
       }
     };
-  }, [subscribeKeys, setCurrentGravity, currentGravity, currentFloorSurface]);
+  }, [
+    subscribeKeys,
+    setCurrentGravity,
+    setCurrentFloorSurface,
+    currentGravity,
+    currentFloorSurface,
+  ]);
 
   // Function to handle camera collision detection
   const handleCameraCollision = (
@@ -524,7 +349,6 @@ export default function Mage() {
         );
         characterState.current.pausedCameraTarget.copy(smoothedCameraTarget);
         characterState.current.pausedCameraUp.copy(state.camera.up);
-        console.log("Captured smoothed camera state and starting freeze");
       }
 
       characterState.current.cameraPauseTimer += delta;
@@ -536,24 +360,8 @@ export default function Mage() {
         // End pause
         characterState.current.cameraPaused = false;
         characterState.current.cameraPauseTimer = 0;
-        console.log("Camera pause ended - resuming normal camera behavior");
       }
     }
-
-    // Update gravity change cooldown timer
-    // if (characterState.current.gravityCooldown) {
-    //   characterState.current.gravityCooldownTimer += delta;
-
-    //   if (
-    //     characterState.current.gravityCooldownTimer >=
-    //     characterState.current.gravityCooldownDuration
-    //   ) {
-    //     // End cooldown
-    //     characterState.current.gravityCooldown = false;
-    //     characterState.current.gravityCooldownTimer = 0;
-    //     console.log("Gravity change cooldown ended - G key available");
-    //   }
-    // }
 
     const { forward, backward, leftward, rightward } = getKeys();
 
@@ -820,8 +628,6 @@ export default function Mage() {
       state.camera.up.copy(cameraUpDirection);
       state.camera.lookAt(smoothedCameraTarget); // Call lookAt again after setting up vector
     }
-
-    // console.log(position);
   });
 
   return (
