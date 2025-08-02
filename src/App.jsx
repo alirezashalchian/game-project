@@ -1,5 +1,5 @@
 import React from "react";
-import Mage from "./components/AiMage";
+import Mage from "./components/Character";
 import { PlacementSystem } from "./components/PlacementSystem";
 import { PlacedModelsManager } from "./components/PlacedModelsManager";
 import { DynamicRoomManager } from "./components/Room/DynamicRoomManager";
