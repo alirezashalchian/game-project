@@ -1,5 +1,5 @@
 import React from "react";
-import { RigidBody, CuboidCollider } from "@react-three/rapier";
+import { RigidBody } from "@react-three/rapier";
 import { roomConfig } from "../Room/roomConfig";
 import { WallPiece } from "./WallPiece";
 
