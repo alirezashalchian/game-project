@@ -155,7 +155,9 @@ export const findRoomContainingPoint = (point, allRooms = null) => {
           id: roomId,
           position: roomCache.positions[roomId],
           boundaries: boundaries,
-          adjacentRooms: roomCache.adjacentRooms[roomId]
+          adjacentRooms: roomCache.adjacentRooms[roomId],
+          innerSize: roomConfig.innerSize,
+          outerSize: roomConfig.outerSize
         };
       }
     }
