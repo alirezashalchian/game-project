@@ -34,7 +34,7 @@ root.render(
           camera={{ position: [0, 4, -10], fov: 45 }}
           style={{ position: "fixed", top: 0, left: 0 }}
         >
-          <Physics debug gravity={[0, 0, 0]}>
+          <Physics gravity={[0, 0, 0]}>
             <RoomWithPhysics />
           </Physics>
         </Canvas>
