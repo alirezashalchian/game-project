@@ -10,6 +10,7 @@ import { CharacterProvider } from "./components/CharacterContext";
 import { SaveSystem } from "./components/SaveSystem";
 import { ModelSelectorUI } from "./components/ModelSelectorUI";
 import { GravityChangeUI } from "./components/GravityChangeUI";
+import { MultiplayerUI } from "./components/MultiplayerUI";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Failed to find the root element");
@@ -20,12 +21,20 @@ root.render(
     <CharacterProvider>
       <KeyboardControls
         map={[
-          { name: "forward", keys: ["ArrowUp", "KeyW"] },
-          { name: "backward", keys: ["ArrowDown", "KeyS"] },
-          { name: "leftward", keys: ["ArrowLeft", "KeyA"] },
-          { name: "rightward", keys: ["ArrowRight", "KeyD"] },
-          { name: "jump", keys: ["Space"] },
-          { name: "gravityChange", keys: ["KeyG"] },
+          // Mage controls (WASD + G)
+          { name: "mageForward", keys: ["KeyW"] },
+          { name: "mageBackward", keys: ["KeyS"] },
+          { name: "mageLeftward", keys: ["KeyA"] },
+          { name: "mageRightward", keys: ["KeyD"] },
+          { name: "mageJump", keys: ["Space"] },
+          { name: "mageGravityChange", keys: ["KeyG"] },
+          // Barbarian controls (Arrow keys + H)
+          { name: "barbarianForward", keys: ["ArrowUp"] },
+          { name: "barbarianBackward", keys: ["ArrowDown"] },
+          { name: "barbarianLeftward", keys: ["ArrowLeft"] },
+          { name: "barbarianRightward", keys: ["ArrowRight"] },
+          { name: "barbarianJump", keys: ["ShiftLeft", "ShiftRight"] },
+          { name: "barbarianGravityChange", keys: ["KeyH"] },
         ]}
       >
         <ModelSelectorUI />
@@ -41,6 +50,7 @@ root.render(
         {/* UI Components */}
         <SaveSystem />
         <GravityChangeUI />
+        <MultiplayerUI />
       </KeyboardControls>
     </CharacterProvider>
   </RoomProvider>

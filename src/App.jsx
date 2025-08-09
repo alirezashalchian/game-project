@@ -1,5 +1,6 @@
 import React from "react";
 import Mage from "./components/Character";
+import Barbarian from "./components/Barbarian";
 import { PlacementSystem } from "./components/PlacementSystem";
 import { PlacedModelsManager } from "./components/PlacedModelsManager";
 import { DynamicRoomManager } from "./components/Room/DynamicRoomManager";
@@ -17,6 +18,7 @@ export default function RoomWithPhysics() {
       <ambientLight intensity={0.3} />
       <DynamicRoomManager />
       <Mage />
+      <Barbarian />
       <PlacementSystem />
       <PlacedModelsManager />
       <axesHelper args={[10]} />

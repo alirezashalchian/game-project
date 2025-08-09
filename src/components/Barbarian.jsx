@@ -1,8 +1,8 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls, useAnimations } from "@react-three/drei";
-import { RigidBody, CapsuleCollider, useRapier } from "@react-three/rapier";
+import { RigidBody, CapsuleCollider } from "@react-three/rapier";
 import { useRoom } from "./RoomContext";
 import { useCharacter } from "./CharacterContext";
 import * as THREE from "three";
@@ -15,19 +15,19 @@ import {
   calculateTargetQuaternion,
 } from "../utils/surfaceUtils";
 
-export default function Mage() {
-  const mage = useGLTF("./models/characters/Mage.glb");
-  const animations = useAnimations(mage.animations, mage.scene);
-  const { updateCurrentRoom, getCurrentRoomCoords } = useRoom();
+export default function Barbarian() {
+  const barbarian = useGLTF("./models/characters/Barbarian.glb");
+  const animations = useAnimations(barbarian.animations, barbarian.scene);
+  const { getCurrentRoomCoords } = useRoom();
   const {
-    mageGravity: currentGravity,
-    setMageGravity: setCurrentGravity,
-    mageFloorSurface: currentFloorSurface,
-    setMageFloorSurface: setCurrentFloorSurface,
+    barbarianGravity: currentGravity,
+    setBarbarianGravity: setCurrentGravity,
+    barbarianFloorSurface: currentFloorSurface,
+    setBarbarianFloorSurface: setCurrentFloorSurface,
   } = useCharacter();
 
   const rigidBodyRef = useRef();
-  const mageRef = useRef();
+  const barbarianRef = useRef();
   const capsuleRef = useRef();
   const currentActionRef = useRef(null);
   const fallingStateRef = useRef({
@@ -39,8 +39,8 @@ export default function Mage() {
   // Get keyboard controls using drei's system
   const [subscribeKeys, getKeys] = useKeyboardControls();
 
-  // Get rapier physics world
-  const { rapier, world } = useRapier();
+  // Get rapier physics world (not needed for this component)
+  // const { rapier, world } = useRapier();
   // Character dimensions
   const capsuleHalfHeight = 0.25;
   const capsuleRadius = 0.5;
@@ -53,28 +53,13 @@ export default function Mage() {
   // Place character slightly off center on the floor to avoid hole in middle
   const floorHeight = roomPosition[1] - roomConfig.innerSize / 2;
   const initialY = floorHeight + capsuleRadius + capsuleHalfHeight + 0.5 + 1;
-  // Offset character 2 units from center to avoid central hole
-  const initialPosition = [roomPosition[0] + 2, initialY, roomPosition[2] + 2];
-
-  // Camera settings
-  const cameraDistance = 5;
-  const cameraHeight = 2;
-  const cameraLookAtHeight = 1;
-  const cameraCollisionOffset = 0.1; // Distance to keep from walls
-
-  // Smoothed camera values
-  const [smoothedCameraPosition] = useState(
-    () => new THREE.Vector3(0, cameraHeight, -cameraDistance)
-  );
-
-  const [smoothedCameraTarget] = useState(() => new THREE.Vector3());
-
-  // Track which surface is currently the floor based on gravity direction (now from context)
+  // Offset barbarian differently from mage to avoid collision (-2 units from center)
+  const initialPosition = [roomPosition[0] - 2, initialY, roomPosition[2] - 2];
 
   // Character state - UPDATED to use quaternions
   const characterState = useRef({
     // Replace rotation with quaternion-based rotation
-    horizontalRotation: 0, // Keep track of horizontal rotation in radians for camera
+    horizontalRotation: 0, // Keep track of horizontal rotation in radians
     currentHorizontalQuaternion: new THREE.Quaternion(), // Current horizontal rotation as quaternion
     targetHorizontalQuaternion: new THREE.Quaternion(), // Target horizontal rotation
     moveSpeed: 5,
@@ -89,13 +74,6 @@ export default function Mage() {
     // Add surface orientation quaternion
     currentSurfaceQuaternion: new THREE.Quaternion(),
     targetSurfaceQuaternion: new THREE.Quaternion(),
-    // Camera pause during surface transitions
-    cameraPaused: false,
-    cameraPauseTimer: 0,
-    cameraPauseDuration: 2.0, // 2 seconds
-    pausedCameraPosition: new THREE.Vector3(),
-    pausedCameraTarget: new THREE.Vector3(),
-    pausedCameraUp: new THREE.Vector3(),
   });
 
   // Helper function to get target gravity from character's facing direction
@@ -136,23 +114,25 @@ export default function Mage() {
   // Display current room coordinates for debugging
   useEffect(() => {
     const currentCoords = getCurrentRoomCoords();
-    console.log("Current room coordinates:", currentCoords);
+    console.log("Barbarian current room coordinates:", currentCoords);
   }, [getCurrentRoomCoords]);
 
   // Update current floor surface whenever gravity changes
   useEffect(() => {
     const newFloorSurface = getFloorSurfaceFromGravity(currentGravity);
     setCurrentFloorSurface(newFloorSurface);
-    console.log(`Current floor surface updated to: ${newFloorSurface}`);
+    console.log(
+      `Barbarian current floor surface updated to: ${newFloorSurface}`
+    );
   }, [currentGravity, setCurrentFloorSurface]);
 
   // Subscribe to jump key
   useEffect(() => {
     const unsubscribeJump = subscribeKeys(
-      (state) => state.mageJump,
+      (state) => state.barbarianJump,
       (pressed) => {
         if (pressed && rigidBodyRef.current) {
-          // Apply jump force on space press
+          // Apply jump force on shift press
           rigidBodyRef.current.applyImpulse(
             { x: 0, y: characterState.current.jumpForce, z: 0 },
             true
@@ -168,10 +148,10 @@ export default function Mage() {
     };
   }, [subscribeKeys]);
 
-  // Subscribe to gravity change key (G)
+  // Subscribe to gravity change key (H)
   useEffect(() => {
-    const unsubscribeG = subscribeKeys(
-      (state) => state.mageGravityChange,
+    const unsubscribeH = subscribeKeys(
+      (state) => state.barbarianGravityChange,
       (pressed) => {
         if (pressed) {
           // STEP 1: Get the "up vector" from the current surface (before transition)
@@ -232,10 +212,6 @@ export default function Mage() {
             characterState.current.currentHorizontalQuaternion.identity();
           }
 
-          // Trigger camera pause for 2 seconds during surface transition
-          characterState.current.cameraPaused = true;
-          characterState.current.cameraPauseTimer = 0;
-
           // Ensure not transitioning (since change is instant)
           characterState.current.isTransitioning = false;
         }
@@ -243,8 +219,8 @@ export default function Mage() {
     );
 
     return () => {
-      if (typeof unsubscribeG === "function") {
-        unsubscribeG();
+      if (typeof unsubscribeH === "function") {
+        unsubscribeH();
       }
     };
   }, [
@@ -254,66 +230,6 @@ export default function Mage() {
     currentGravity,
     currentFloorSurface,
   ]);
-
-  // Function to handle camera collision detection
-  const handleCameraCollision = (
-    characterPosition,
-    idealCameraPosition,
-    surfaceNormal
-  ) => {
-    // Create ray origin at character position with surface-relative height adjustment
-    const surfaceRelativeOffset = surfaceNormal
-      .clone()
-      .multiplyScalar(cameraLookAtHeight);
-    const rayOrigin = new THREE.Vector3(
-      characterPosition.x + surfaceRelativeOffset.x,
-      characterPosition.y + surfaceRelativeOffset.y,
-      characterPosition.z + surfaceRelativeOffset.z
-    );
-
-    // Calculate direction from character to camera
-    const rayDirection = new THREE.Vector3();
-    rayDirection.subVectors(idealCameraPosition, rayOrigin).normalize();
-
-    // Calculate actual distance to camera
-    const distanceToCamera = rayOrigin.distanceTo(idealCameraPosition);
-
-    // Cast ray from character towards ideal camera position
-    const ray = new rapier.Ray(
-      { x: rayOrigin.x, y: rayOrigin.y, z: rayOrigin.z },
-      { x: rayDirection.x, y: rayDirection.y, z: rayDirection.z }
-    );
-
-    const hit = world.castRay(ray, distanceToCamera, true);
-
-    // If we hit something, adjust camera position and calculate tilt
-    if (hit && hit.timeOfImpact < distanceToCamera) {
-      // Calculate adjusted position at hit point minus a small offset to avoid clipping
-      const adjustedDistance = hit.timeOfImpact - cameraCollisionOffset;
-
-      // Calculate new position
-      const adjustedPosition = new THREE.Vector3();
-      adjustedPosition.copy(rayOrigin);
-      adjustedPosition.addScaledVector(rayDirection, adjustedDistance);
-
-      // Calculate tilt amount based on how much we had to pull the camera closer
-      const distanceReduction = distanceToCamera - adjustedDistance;
-      const maxTiltAngle = Math.PI / 12; // 15 degrees max tilt
-      const tiltAmount =
-        Math.min(distanceReduction / cameraDistance, 1.0) * maxTiltAngle;
-
-      return {
-        position: adjustedPosition,
-        tilt: tiltAmount,
-      };
-    }
-
-    // No collision, return ideal position with no tilt
-    return {
-      position: idealCameraPosition,
-      tilt: 0,
-    };
-  };
 
   // Function to smoothly play a new animation
   const playAction = (newAction) => {
@@ -325,49 +241,21 @@ export default function Mage() {
     currentActionRef.current = newAction;
   };
 
-  // Update physics and camera each frame
+  // Update physics each frame (no camera logic)
   useFrame((state, delta) => {
-    if (!rigidBodyRef.current || !mageRef.current) return;
+    if (!rigidBodyRef.current || !barbarianRef.current) return;
 
-    // Get character position for camera positioning
-    const position = rigidBodyRef.current.translation();
-    const characterPosition = new THREE.Vector3(
-      position.x,
-      position.y,
-      position.z
-    );
+    // Get character position (not used for room updates)
+    // const position = rigidBodyRef.current.translation();
 
     // Update current room based on character position
-    updateCurrentRoom([position.x, position.y, position.z]);
-
-    // Update camera pause timer
-    if (characterState.current.cameraPaused) {
-      if (characterState.current.cameraPauseTimer === 0) {
-        // First frame of pause - capture current smoothed camera state
-        characterState.current.pausedCameraPosition.copy(
-          smoothedCameraPosition
-        );
-        characterState.current.pausedCameraTarget.copy(smoothedCameraTarget);
-        characterState.current.pausedCameraUp.copy(state.camera.up);
-      }
-
-      characterState.current.cameraPauseTimer += delta;
-
-      if (
-        characterState.current.cameraPauseTimer >=
-        characterState.current.cameraPauseDuration
-      ) {
-        // End pause
-        characterState.current.cameraPaused = false;
-        characterState.current.cameraPauseTimer = 0;
-      }
-    }
+    // updateCurrentRoom([position.x, position.y, position.z]);
 
     const {
-      mageForward: forward,
-      mageBackward: backward,
-      mageLeftward: leftward,
-      mageRightward: rightward,
+      barbarianForward: forward,
+      barbarianBackward: backward,
+      barbarianLeftward: leftward,
+      barbarianRightward: rightward,
     } = getKeys();
 
     // Check if character is falling (velocity-based detection)
@@ -447,10 +335,7 @@ export default function Mage() {
         characterState.current.horizontalRotation += rotationChange;
 
         // Get the surface's up vector for rotation axis
-        const { up } = getSurfaceVectors(
-          currentFloorSurface,
-          characterState.current.horizontalRotation
-        );
+        const { up } = getSurfaceVectors(currentFloorSurface, 0);
 
         // Create new horizontal rotation quaternion
         characterState.current.currentHorizontalQuaternion.setFromAxisAngle(
@@ -475,9 +360,6 @@ export default function Mage() {
       z: finalQuaternion.z,
       w: finalQuaternion.w,
     });
-
-    // // Apply to visual model
-    // mageRef.current.quaternion.copy(finalQuaternion);
 
     // Movement calculations (only when not transitioning)
     if (!characterState.current.isTransitioning) {
@@ -536,106 +418,6 @@ export default function Mage() {
       },
       true
     );
-
-    // Calculate surface-relative camera positioning
-    // Use ONLY surface orientation (not character facing) for camera positioning
-    const surfaceOnlyQuaternion =
-      characterState.current.currentSurfaceQuaternion.clone();
-
-    // Derive surface coordinate system from surface orientation only
-    const surfaceNormal = new THREE.Vector3(0, 1, 0); // Local "up" direction
-    surfaceNormal.applyQuaternion(surfaceOnlyQuaternion); // Transform to world space
-
-    const surfaceForward = new THREE.Vector3(0, 0, 1); // Local "forward" direction
-    surfaceForward.applyQuaternion(surfaceOnlyQuaternion); // Transform to world space
-
-    // Apply horizontal rotation to forward direction only (for character facing)
-    const characterForward = surfaceForward.clone();
-    const horizontalQuaternion = new THREE.Quaternion();
-    horizontalQuaternion.setFromAxisAngle(
-      surfaceNormal,
-      characterState.current.horizontalRotation
-    );
-    characterForward.applyQuaternion(horizontalQuaternion);
-
-    // Calculate character's backward direction (opposite of character's facing on the surface)
-    const characterBackward = characterForward.clone().negate();
-
-    // Calculate camera position using: character + (backward * distance) + (normal * height)
-    const backwardOffset = characterBackward
-      .clone()
-      .multiplyScalar(cameraDistance);
-    const normalOffset = surfaceNormal.clone().multiplyScalar(cameraHeight);
-
-    const idealCameraPosition = new THREE.Vector3(
-      position.x + backwardOffset.x + normalOffset.x,
-      position.y + backwardOffset.y + normalOffset.y,
-      position.z + backwardOffset.z + normalOffset.z
-    );
-
-    // Check for camera collisions and adjust position if needed
-    const collisionResult = handleCameraCollision(
-      characterPosition,
-      idealCameraPosition,
-      surfaceNormal
-    );
-    const collisionAdjustedPosition = collisionResult.position;
-    const tiltAmount = collisionResult.tilt;
-
-    // Set camera up direction based on surface (pointing away from surface)
-    const cameraUpDirection = surfaceNormal.clone();
-
-    // Calculate look-at target (character position with surface-relative height offset)
-    const surfaceRelativeLookAtOffset = surfaceNormal
-      .clone()
-      .multiplyScalar(cameraLookAtHeight);
-    let targetLookAt = new THREE.Vector3(
-      position.x + surfaceRelativeLookAtOffset.x,
-      position.y + surfaceRelativeLookAtOffset.y,
-      position.z + surfaceRelativeLookAtOffset.z
-    );
-
-    // Apply tilt when collision is detected
-    if (tiltAmount > 0) {
-      // Calculate the surface's "right" vector from surface orientation only
-      const { right: surfaceRight } = getSurfaceVectors(
-        currentFloorSurface,
-        characterState.current.horizontalRotation
-      );
-
-      // Create tilt rotation around the surface right axis (tilts camera down)
-      const tiltQuaternion = new THREE.Quaternion();
-      tiltQuaternion.setFromAxisAngle(surfaceRight, tiltAmount);
-
-      // Apply tilt to the look-at direction
-      const lookAtDirection = new THREE.Vector3();
-      lookAtDirection.subVectors(targetLookAt, collisionAdjustedPosition);
-      lookAtDirection.applyQuaternion(tiltQuaternion);
-
-      // Update the tilted look-at target
-      targetLookAt = collisionAdjustedPosition.clone().add(lookAtDirection);
-    }
-
-    // Update camera position and orientation
-    if (characterState.current.cameraPaused) {
-      // During pause, keep camera frozen at the stored smoothed position but look at character
-      state.camera.position.copy(characterState.current.pausedCameraPosition);
-      state.camera.lookAt(characterPosition);
-      state.camera.up.copy(characterState.current.pausedCameraUp);
-      state.camera.lookAt(characterPosition); // Call lookAt again after setting up vector
-    } else {
-      // Normal camera behavior - smoothly interpolate camera position and target
-      smoothedCameraPosition.lerp(collisionAdjustedPosition, 5 * delta);
-      smoothedCameraTarget.lerp(targetLookAt, 5 * delta);
-
-      // Update camera position and orientation
-      state.camera.position.copy(smoothedCameraPosition);
-
-      // Set camera to look at character with correct up direction
-      state.camera.lookAt(smoothedCameraTarget);
-      state.camera.up.copy(cameraUpDirection);
-      state.camera.lookAt(smoothedCameraTarget); // Call lookAt again after setting up vector
-    }
   });
 
   return (
@@ -655,9 +437,9 @@ export default function Mage() {
         ref={capsuleRef}
         args={[capsuleHalfHeight, capsuleRadius]}
       />
-      <group ref={mageRef}>
+      <group ref={barbarianRef}>
         <primitive
-          object={mage.scene}
+          object={barbarian.scene}
           scale={0.5}
           position={[0, modelYOffset, 0]}
           // No rotation - inherits from RigidBody (quaternion-based)
@@ -666,19 +448,3 @@ export default function Mage() {
     </RigidBody>
   );
 }
-
-/**
- * Potential issues of the capsule collider not rotating with the visual gltf model:
-1. Animation and Model Complexity Issues
-Problem: If your character model becomes more complex (non-symmetrical), players will see the visual model rotating but collision detection won't match
-Example: A character holding a sword or staff extending forward - visually it rotates, but collision shape stays circular
-2. Interaction System Problems.
-Problem: Raycast interactions (like object pickup, weapon swinging) will be based on visual rotation, but physics interactions use the non-rotating capsule
-Example: Player appears to swing a sword to the right, but collision detection uses the original forward direction
-3. Combat/Damage System Issues.
-Problem: If you implement directional damage, attack ranges, or shield mechanics, the mismatch becomes problematic
-Example: Enemy attacks from the character's visual "back" but hits the circular collider from any direction
-4. Advanced Movement Features.
-Problem: Features like wall-running, climbing, or directional dodging become harder to implement
-Example: Character visually faces a wall to climb it, but physics body has no "front" direction.
- */

@@ -3,20 +3,32 @@ import React, { createContext, useContext, useState } from "react";
 const CharacterContext = createContext(null);
 
 export function CharacterProvider({ children }) {
-  // Current gravity state
-  const [currentGravity, setCurrentGravity] = useState([0, -9.8, 0]);
+  // Mage gravity state
+  const [mageGravity, setMageGravity] = useState([0, -9.8, 0]);
+  const [mageFloorSurface, setMageFloorSurface] = useState("bottom");
 
-  // Current floor surface state (which surface the character is walking on)
-  const [currentFloorSurface, setCurrentFloorSurface] = useState("bottom");
+  // Barbarian gravity state
+  const [barbarianGravity, setBarbarianGravity] = useState([0, -9.8, 0]);
+  const [barbarianFloorSurface, setBarbarianFloorSurface] = useState("bottom");
 
   const value = {
-    // State
-    currentGravity,
-    currentFloorSurface,
+    // Mage state
+    mageGravity,
+    mageFloorSurface,
+    setMageGravity,
+    setMageFloorSurface,
 
-    // Actions
-    setCurrentGravity,
-    setCurrentFloorSurface,
+    // Barbarian state
+    barbarianGravity,
+    barbarianFloorSurface,
+    setBarbarianGravity,
+    setBarbarianFloorSurface,
+
+    // Legacy support (for backward compatibility if needed)
+    currentGravity: mageGravity,
+    currentFloorSurface: mageFloorSurface,
+    setCurrentGravity: setMageGravity,
+    setCurrentFloorSurface: setMageFloorSurface,
   };
 
   return (
