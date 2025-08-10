@@ -2,7 +2,7 @@ import { Client, getStateCallbacks } from 'colyseus.js';
  
 async function connect() {
     const client = new Client('http://localhost:2567');
-    const room = await client.joinOrCreate('my_room', {
+    const room = await client.joinOrCreate('game_room', {
         /* custom join options */
     });
     const $ = getStateCallbacks(room);
