@@ -10,7 +10,7 @@ import { CharacterProvider } from "./components/CharacterContext";
 import { SaveSystem } from "./components/SaveSystem";
 import { ModelSelectorUI } from "./components/ModelSelectorUI";
 import { GravityChangeUI } from "./components/GravityChangeUI";
-import { MultiplayerUI } from "./components/MultiplayerUI";
+import "./client.js";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Failed to find the root element");
@@ -50,7 +50,6 @@ root.render(
         {/* UI Components */}
         <SaveSystem />
         <GravityChangeUI />
-        <MultiplayerUI />
       </KeyboardControls>
     </CharacterProvider>
   </RoomProvider>
