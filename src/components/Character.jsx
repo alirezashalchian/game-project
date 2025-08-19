@@ -5,6 +5,7 @@ import { useKeyboardControls, useAnimations } from "@react-three/drei";
 import { RigidBody, CapsuleCollider, useRapier } from "@react-three/rapier";
 import { useRoom } from "./RoomContext";
 import { useCharacter } from "./CharacterContext";
+import { useColyseus } from "@/context/ColyseusContext"; // Add this import
 import * as THREE from "three";
 import { calculateRoomPosition } from "../utils/roomUtils";
 import { roomConfig } from "./Room/roomConfig";
@@ -19,6 +20,7 @@ export default function Mage() {
   const mage = useGLTF("./models/characters/Mage.glb");
   const animations = useAnimations(mage.animations, mage.scene);
   const { updateCurrentRoom, getCurrentRoomCoords } = useRoom();
+  const { sendPlayerUpdate, currentSessionId } = useColyseus(); // Add this line
   const {
     mageGravity: currentGravity,
     setMageGravity: setCurrentGravity,
@@ -33,7 +35,17 @@ export default function Mage() {
   const fallingStateRef = useRef({
     isFalling: false,
     fallingFrames: 0,
-    requiredFrames: 3, // Require 3 consecutive frames of falling before animation
+    requiredFrames: 3,
+  });
+
+  // Track last sent data to avoid unnecessary updates
+  const lastSentData = useRef({
+    position: null,
+    quaternion: null,
+    animation: null,
+    gravity: null,
+    floorSurface: null,
+    roomCoords: null,
   });
 
   // Get keyboard controls using drei's system
@@ -41,13 +53,14 @@ export default function Mage() {
 
   // Get rapier physics world
   const { rapier, world } = useRapier();
+
   // Character dimensions
   const capsuleHalfHeight = 0.25;
   const capsuleRadius = 0.5;
   const modelYOffset = -0.75;
 
   // Get initial position in the center of room [4,4,4]
-  const centerCoords = [4, 4, 4]; // Center of the 9x9x9 complex
+  const centerCoords = [4, 4, 4];
   const roomPosition = calculateRoomPosition(centerCoords);
 
   // Place character slightly off center on the floor to avoid hole in middle
@@ -60,47 +73,99 @@ export default function Mage() {
   const cameraDistance = 5;
   const cameraHeight = 2;
   const cameraLookAtHeight = 1;
-  const cameraCollisionOffset = 0.1; // Distance to keep from walls
+  const cameraCollisionOffset = 0.1;
 
   // Smoothed camera values
   const [smoothedCameraPosition] = useState(
     () => new THREE.Vector3(0, cameraHeight, -cameraDistance)
   );
-
   const [smoothedCameraTarget] = useState(() => new THREE.Vector3());
-
-  // Track which surface is currently the floor based on gravity direction (now from context)
 
   // Character state - UPDATED to use quaternions
   const characterState = useRef({
-    // Replace rotation with quaternion-based rotation
-    horizontalRotation: 0, // Keep track of horizontal rotation in radians for camera
-    currentHorizontalQuaternion: new THREE.Quaternion(), // Current horizontal rotation as quaternion
-    targetHorizontalQuaternion: new THREE.Quaternion(), // Target horizontal rotation
+    horizontalRotation: 0,
+    currentHorizontalQuaternion: new THREE.Quaternion(),
+    targetHorizontalQuaternion: new THREE.Quaternion(),
     moveSpeed: 5,
     rotationSpeed: 3,
     jumpForce: 4,
     acceleration: 25,
     deceleration: 8,
-    // Surface orientation tracking
     isTransitioning: false,
     transitionProgress: 0,
     transitionDuration: 1.0,
-    // Add surface orientation quaternion
     currentSurfaceQuaternion: new THREE.Quaternion(),
     targetSurfaceQuaternion: new THREE.Quaternion(),
-    // Camera pause during surface transitions
     cameraPaused: false,
     cameraPauseTimer: 0,
-    cameraPauseDuration: 2.0, // 2 seconds
+    cameraPauseDuration: 2.0,
     pausedCameraPosition: new THREE.Vector3(),
     pausedCameraTarget: new THREE.Vector3(),
     pausedCameraUp: new THREE.Vector3(),
   });
 
+  // Helper function to check if we should send an update
+  const shouldSendUpdate = (currentData) => {
+    const lastData = lastSentData.current;
+
+    // Check position change (threshold: 0.1 units)
+    if (
+      !lastData.position ||
+      Math.sqrt(
+        Math.pow(currentData.position.x - lastData.position.x, 2) +
+          Math.pow(currentData.position.y - lastData.position.y, 2) +
+          Math.pow(currentData.position.z - lastData.position.z, 2)
+      ) > 0.1
+    ) {
+      return true;
+    }
+
+    // Check rotation change (threshold: 0.05 radians ≈ 3 degrees)
+    if (
+      !lastData.quaternion ||
+      Math.abs(currentData.quaternion.x - lastData.quaternion.x) > 0.05 ||
+      Math.abs(currentData.quaternion.y - lastData.quaternion.y) > 0.05 ||
+      Math.abs(currentData.quaternion.z - lastData.quaternion.z) > 0.05 ||
+      Math.abs(currentData.quaternion.w - lastData.quaternion.w) > 0.05
+    ) {
+      return true;
+    }
+
+    // Check animation change
+    if (currentData.animation !== lastData.animation) {
+      return true;
+    }
+
+    // Check gravity change
+    if (
+      !lastData.gravity ||
+      Math.abs(currentData.gravity[0] - lastData.gravity[0]) > 0.1 ||
+      Math.abs(currentData.gravity[1] - lastData.gravity[1]) > 0.1 ||
+      Math.abs(currentData.gravity[2] - lastData.gravity[2]) > 0.1
+    ) {
+      return true;
+    }
+
+    // Check floor surface change
+    if (currentData.floorSurface !== lastData.floorSurface) {
+      return true;
+    }
+
+    // Check room coordinates change
+    if (
+      !lastData.roomCoords ||
+      currentData.roomCoords[0] !== lastData.roomCoords[0] ||
+      currentData.roomCoords[1] !== lastData.roomCoords[1] ||
+      currentData.roomCoords[2] !== lastData.roomCoords[2]
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
   // Helper function to get target gravity from character's facing direction
   const getTargetGravityFromCharacterFacing = () => {
-    // Get character's current world-space forward direction
     const currentQuaternion =
       characterState.current.currentSurfaceQuaternion.clone();
     currentQuaternion.premultiply(
@@ -110,7 +175,6 @@ export default function Mage() {
     const forward = new THREE.Vector3(0, 0, 1);
     forward.applyQuaternion(currentQuaternion);
 
-    // Find dominant axis
     const absX = Math.abs(forward.x);
     const absY = Math.abs(forward.y);
     const absZ = Math.abs(forward.z);
@@ -133,17 +197,10 @@ export default function Mage() {
     }
   };
 
-  // Display current room coordinates for debugging
-  useEffect(() => {
-    const currentCoords = getCurrentRoomCoords();
-    console.log("Current room coordinates:", currentCoords);
-  }, [getCurrentRoomCoords]);
-
   // Update current floor surface whenever gravity changes
   useEffect(() => {
     const newFloorSurface = getFloorSurfaceFromGravity(currentGravity);
     setCurrentFloorSurface(newFloorSurface);
-    console.log(`Current floor surface updated to: ${newFloorSurface}`);
   }, [currentGravity, setCurrentFloorSurface]);
 
   // Subscribe to jump key
@@ -152,7 +209,6 @@ export default function Mage() {
       (state) => state.mageJump,
       (pressed) => {
         if (pressed && rigidBodyRef.current) {
-          // Apply jump force on space press
           rigidBodyRef.current.applyImpulse(
             { x: 0, y: characterState.current.jumpForce, z: 0 },
             true
@@ -168,23 +224,18 @@ export default function Mage() {
     };
   }, [subscribeKeys]);
 
-  // Subscribe to gravity change key (G)
+  // Subscribe to gravity change key (G) - UPDATED to send to server
   useEffect(() => {
     const unsubscribeG = subscribeKeys(
       (state) => state.mageGravityChange,
       (pressed) => {
         if (pressed) {
-          // STEP 1: Get the "up vector" from the current surface (before transition)
           const fromSurfaceUpVector = getSurfaceUpVector(currentFloorSurface);
-
-          // STEP 2: Get target direction from character's facing
           const { gravity, surface } = getTargetGravityFromCharacterFacing();
 
-          // STEP 3: Change gravity immediately
           setCurrentGravity(gravity);
           setCurrentFloorSurface(surface);
 
-          // STEP 4: Apply new surface quaternion
           const newSurfaceQuaternion = calculateTargetQuaternion(surface);
           characterState.current.currentSurfaceQuaternion.copy(
             newSurfaceQuaternion
@@ -193,25 +244,16 @@ export default function Mage() {
             newSurfaceQuaternion
           );
 
-          // STEP 5: Calculate horizontal rotation to face the "from surface up vector"
-          // We want the character to face the fromSurfaceUpVector direction on the new surface
-
-          // Get the surface vectors for the new surface
           const { up: newSurfaceUp, forward: newDefaultForward } =
             getSurfaceVectors(surface, 0);
 
-          // Project the target world direction onto the new surface's horizontal plane
-          // Remove any component along the surface normal (up direction)
           const projectedTarget = fromSurfaceUpVector.clone();
           const normalComponent = projectedTarget.dot(newSurfaceUp);
           projectedTarget.addScaledVector(newSurfaceUp, -normalComponent);
 
-          // Check if target direction is not perpendicular to the surface
           if (projectedTarget.length() > 0.001) {
             projectedTarget.normalize();
 
-            // Calculate the angle between the default forward and our target direction
-            // on the new surface's horizontal plane
             const dotProduct = newDefaultForward.dot(projectedTarget);
             const crossProduct = newDefaultForward
               .clone()
@@ -220,23 +262,18 @@ export default function Mage() {
               crossProduct.dot(newSurfaceUp),
               dotProduct
             );
-            // Set the new horizontal rotation
             characterState.current.horizontalRotation = angle;
             characterState.current.currentHorizontalQuaternion.setFromAxisAngle(
               newSurfaceUp,
               angle
             );
           } else {
-            // Target direction is perpendicular to surface - no meaningful horizontal direction
             characterState.current.horizontalRotation = 0;
             characterState.current.currentHorizontalQuaternion.identity();
           }
 
-          // Trigger camera pause for 2 seconds during surface transition
           characterState.current.cameraPaused = true;
           characterState.current.cameraPauseTimer = 0;
-
-          // Ensure not transitioning (since change is instant)
           characterState.current.isTransitioning = false;
         }
       }
@@ -261,7 +298,6 @@ export default function Mage() {
     idealCameraPosition,
     surfaceNormal
   ) => {
-    // Create ray origin at character position with surface-relative height adjustment
     const surfaceRelativeOffset = surfaceNormal
       .clone()
       .multiplyScalar(cameraLookAtHeight);
@@ -271,14 +307,11 @@ export default function Mage() {
       characterPosition.z + surfaceRelativeOffset.z
     );
 
-    // Calculate direction from character to camera
     const rayDirection = new THREE.Vector3();
     rayDirection.subVectors(idealCameraPosition, rayOrigin).normalize();
 
-    // Calculate actual distance to camera
     const distanceToCamera = rayOrigin.distanceTo(idealCameraPosition);
 
-    // Cast ray from character towards ideal camera position
     const ray = new rapier.Ray(
       { x: rayOrigin.x, y: rayOrigin.y, z: rayOrigin.z },
       { x: rayDirection.x, y: rayDirection.y, z: rayDirection.z }
@@ -286,19 +319,15 @@ export default function Mage() {
 
     const hit = world.castRay(ray, distanceToCamera, true);
 
-    // If we hit something, adjust camera position and calculate tilt
     if (hit && hit.timeOfImpact < distanceToCamera) {
-      // Calculate adjusted position at hit point minus a small offset to avoid clipping
       const adjustedDistance = hit.timeOfImpact - cameraCollisionOffset;
 
-      // Calculate new position
       const adjustedPosition = new THREE.Vector3();
       adjustedPosition.copy(rayOrigin);
       adjustedPosition.addScaledVector(rayDirection, adjustedDistance);
 
-      // Calculate tilt amount based on how much we had to pull the camera closer
       const distanceReduction = distanceToCamera - adjustedDistance;
-      const maxTiltAngle = Math.PI / 12; // 15 degrees max tilt
+      const maxTiltAngle = Math.PI / 12;
       const tiltAmount =
         Math.min(distanceReduction / cameraDistance, 1.0) * maxTiltAngle;
 
@@ -308,7 +337,6 @@ export default function Mage() {
       };
     }
 
-    // No collision, return ideal position with no tilt
     return {
       position: idealCameraPosition,
       tilt: 0,
@@ -343,7 +371,6 @@ export default function Mage() {
     // Update camera pause timer
     if (characterState.current.cameraPaused) {
       if (characterState.current.cameraPauseTimer === 0) {
-        // First frame of pause - capture current smoothed camera state
         characterState.current.pausedCameraPosition.copy(
           smoothedCameraPosition
         );
@@ -357,7 +384,6 @@ export default function Mage() {
         characterState.current.cameraPauseTimer >=
         characterState.current.cameraPauseDuration
       ) {
-        // End pause
         characterState.current.cameraPaused = false;
         characterState.current.cameraPauseTimer = 0;
       }
@@ -378,39 +404,36 @@ export default function Mage() {
       currentVel.z
     );
 
-    // Normalize gravity direction for comparison
     const gravityDirection = new THREE.Vector3(...currentGravity).normalize();
-
-    // Calculate velocity component in gravity direction
     const fallingVelocity = velocityVector.dot(gravityDirection);
-
-    // Threshold for determining if character is falling
-    // Lowered threshold since the oscillating values show normal values are 0.4-1.0
     const fallingThreshold = 1.5;
     const isCurrentlyFalling = fallingVelocity > fallingThreshold;
 
-    // Update falling state with persistence check
     if (isCurrentlyFalling) {
       fallingStateRef.current.fallingFrames++;
     } else {
       fallingStateRef.current.fallingFrames = 0;
     }
 
-    // Only consider "falling" if it persists for required frames
     const persistentFalling =
       fallingStateRef.current.fallingFrames >=
       fallingStateRef.current.requiredFrames;
     fallingStateRef.current.isFalling = persistentFalling;
 
-    // Handle animation switching (persistent falling has priority)
+    // Determine current animation
+    let currentAnimationName = "Idle";
     if (persistentFalling) {
       playAction(animations.actions.Jump_Idle);
+      currentAnimationName = "Jump_Idle";
     } else if (forward) {
       playAction(animations.actions.Running_A);
+      currentAnimationName = "Running_A";
     } else if (backward) {
       playAction(animations.actions.Walking_Backwards);
+      currentAnimationName = "Walking_Backwards";
     } else {
       playAction(animations.actions.Idle);
+      currentAnimationName = "Idle";
     }
 
     // Handle surface transition
@@ -419,7 +442,6 @@ export default function Mage() {
         delta / characterState.current.transitionDuration;
 
       if (characterState.current.transitionProgress >= 1.0) {
-        // Transition complete
         characterState.current.transitionProgress = 1.0;
         characterState.current.isTransitioning = false;
         characterState.current.currentSurfaceQuaternion.copy(
@@ -427,7 +449,6 @@ export default function Mage() {
         );
       }
 
-      // Smoothly interpolate between current and target surface quaternion
       characterState.current.currentSurfaceQuaternion.slerp(
         characterState.current.targetSurfaceQuaternion,
         characterState.current.transitionProgress
@@ -446,13 +467,11 @@ export default function Mage() {
       if (rotationChange !== 0) {
         characterState.current.horizontalRotation += rotationChange;
 
-        // Get the surface's up vector for rotation axis
         const { up } = getSurfaceVectors(
           currentFloorSurface,
           characterState.current.horizontalRotation
         );
 
-        // Create new horizontal rotation quaternion
         characterState.current.currentHorizontalQuaternion.setFromAxisAngle(
           up,
           characterState.current.horizontalRotation
@@ -461,7 +480,6 @@ export default function Mage() {
     }
 
     // Calculate final combined quaternion (surface orientation + horizontal rotation)
-    // Apply surface orientation first, then horizontal rotation in surface-local space
     const finalQuaternion =
       characterState.current.currentSurfaceQuaternion.clone();
     finalQuaternion.premultiply(
@@ -476,12 +494,8 @@ export default function Mage() {
       w: finalQuaternion.w,
     });
 
-    // // Apply to visual model
-    // mageRef.current.quaternion.copy(finalQuaternion);
-
     // Movement calculations (only when not transitioning)
     if (!characterState.current.isTransitioning) {
-      // Calculate movement direction relative to current surface
       const { forward: surfaceForward } = getSurfaceVectors(
         currentFloorSurface,
         characterState.current.horizontalRotation
@@ -497,7 +511,6 @@ export default function Mage() {
         moveDirection.sub(surfaceForward);
       }
 
-      // Apply movement (preserve current velocity in gravity direction)
       const targetVelocity = new THREE.Vector3();
       if (moveDirection.length() > 0) {
         moveDirection.normalize();
@@ -505,7 +518,6 @@ export default function Mage() {
         targetVelocity.copy(moveDirection);
       }
 
-      // Preserve current velocity to maintain gravity/physics
       const currentVelocity = new THREE.Vector3(
         currentVel.x,
         currentVel.y,
@@ -526,7 +538,7 @@ export default function Mage() {
       );
     }
 
-    // Apply gravity force each frame (using current gravity direction)
+    // Apply gravity force each frame
     const gravityStrength = 5;
     rigidBodyRef.current.applyImpulse(
       {
@@ -538,18 +550,15 @@ export default function Mage() {
     );
 
     // Calculate surface-relative camera positioning
-    // Use ONLY surface orientation (not character facing) for camera positioning
     const surfaceOnlyQuaternion =
       characterState.current.currentSurfaceQuaternion.clone();
 
-    // Derive surface coordinate system from surface orientation only
-    const surfaceNormal = new THREE.Vector3(0, 1, 0); // Local "up" direction
-    surfaceNormal.applyQuaternion(surfaceOnlyQuaternion); // Transform to world space
+    const surfaceNormal = new THREE.Vector3(0, 1, 0);
+    surfaceNormal.applyQuaternion(surfaceOnlyQuaternion);
 
-    const surfaceForward = new THREE.Vector3(0, 0, 1); // Local "forward" direction
-    surfaceForward.applyQuaternion(surfaceOnlyQuaternion); // Transform to world space
+    const surfaceForward = new THREE.Vector3(0, 0, 1);
+    surfaceForward.applyQuaternion(surfaceOnlyQuaternion);
 
-    // Apply horizontal rotation to forward direction only (for character facing)
     const characterForward = surfaceForward.clone();
     const horizontalQuaternion = new THREE.Quaternion();
     horizontalQuaternion.setFromAxisAngle(
@@ -558,10 +567,8 @@ export default function Mage() {
     );
     characterForward.applyQuaternion(horizontalQuaternion);
 
-    // Calculate character's backward direction (opposite of character's facing on the surface)
     const characterBackward = characterForward.clone().negate();
 
-    // Calculate camera position using: character + (backward * distance) + (normal * height)
     const backwardOffset = characterBackward
       .clone()
       .multiplyScalar(cameraDistance);
@@ -573,7 +580,6 @@ export default function Mage() {
       position.z + backwardOffset.z + normalOffset.z
     );
 
-    // Check for camera collisions and adjust position if needed
     const collisionResult = handleCameraCollision(
       characterPosition,
       idealCameraPosition,
@@ -582,10 +588,8 @@ export default function Mage() {
     const collisionAdjustedPosition = collisionResult.position;
     const tiltAmount = collisionResult.tilt;
 
-    // Set camera up direction based on surface (pointing away from surface)
     const cameraUpDirection = surfaceNormal.clone();
 
-    // Calculate look-at target (character position with surface-relative height offset)
     const surfaceRelativeLookAtOffset = surfaceNormal
       .clone()
       .multiplyScalar(cameraLookAtHeight);
@@ -595,46 +599,74 @@ export default function Mage() {
       position.z + surfaceRelativeLookAtOffset.z
     );
 
-    // Apply tilt when collision is detected
     if (tiltAmount > 0) {
-      // Calculate the surface's "right" vector from surface orientation only
       const { right: surfaceRight } = getSurfaceVectors(
         currentFloorSurface,
         characterState.current.horizontalRotation
       );
 
-      // Create tilt rotation around the surface right axis (tilts camera down)
       const tiltQuaternion = new THREE.Quaternion();
       tiltQuaternion.setFromAxisAngle(surfaceRight, tiltAmount);
 
-      // Apply tilt to the look-at direction
       const lookAtDirection = new THREE.Vector3();
       lookAtDirection.subVectors(targetLookAt, collisionAdjustedPosition);
       lookAtDirection.applyQuaternion(tiltQuaternion);
 
-      // Update the tilted look-at target
       targetLookAt = collisionAdjustedPosition.clone().add(lookAtDirection);
     }
 
     // Update camera position and orientation
     if (characterState.current.cameraPaused) {
-      // During pause, keep camera frozen at the stored smoothed position but look at character
       state.camera.position.copy(characterState.current.pausedCameraPosition);
       state.camera.lookAt(characterPosition);
       state.camera.up.copy(characterState.current.pausedCameraUp);
-      state.camera.lookAt(characterPosition); // Call lookAt again after setting up vector
+      state.camera.lookAt(characterPosition);
     } else {
-      // Normal camera behavior - smoothly interpolate camera position and target
       smoothedCameraPosition.lerp(collisionAdjustedPosition, 5 * delta);
       smoothedCameraTarget.lerp(targetLookAt, 5 * delta);
 
-      // Update camera position and orientation
       state.camera.position.copy(smoothedCameraPosition);
-
-      // Set camera to look at character with correct up direction
       state.camera.lookAt(smoothedCameraTarget);
       state.camera.up.copy(cameraUpDirection);
-      state.camera.lookAt(smoothedCameraTarget); // Call lookAt again after setting up vector
+      state.camera.lookAt(smoothedCameraTarget);
+    }
+
+    // MULTIPLAYER UPDATE: Send player data to server
+    if (sendPlayerUpdate && currentSessionId) {
+      const currentRoomCoords = getCurrentRoomCoords();
+
+      const updateData = {
+        position: {
+          x: position.x,
+          y: position.y,
+          z: position.z,
+        },
+        quaternion: {
+          x: finalQuaternion.x,
+          y: finalQuaternion.y,
+          z: finalQuaternion.z,
+          w: finalQuaternion.w,
+        },
+        animation: currentAnimationName,
+        gravity: currentGravity,
+        floorSurface: currentFloorSurface,
+        roomCoords: currentRoomCoords,
+      };
+
+      // Only send update if there's a significant change
+      if (shouldSendUpdate(updateData)) {
+        sendPlayerUpdate(updateData);
+
+        // Update last sent data
+        lastSentData.current = {
+          position: new THREE.Vector3(position.x, position.y, position.z),
+          quaternion: finalQuaternion.clone(),
+          animation: currentAnimationName,
+          gravity: [...currentGravity],
+          floorSurface: currentFloorSurface,
+          roomCoords: [...currentRoomCoords],
+        };
+      }
     }
   });
 
@@ -660,25 +692,8 @@ export default function Mage() {
           object={mage.scene}
           scale={0.5}
           position={[0, modelYOffset, 0]}
-          // No rotation - inherits from RigidBody (quaternion-based)
         />
       </group>
     </RigidBody>
   );
 }
-
-/**
- * Potential issues of the capsule collider not rotating with the visual gltf model:
-1. Animation and Model Complexity Issues
-Problem: If your character model becomes more complex (non-symmetrical), players will see the visual model rotating but collision detection won't match
-Example: A character holding a sword or staff extending forward - visually it rotates, but collision shape stays circular
-2. Interaction System Problems.
-Problem: Raycast interactions (like object pickup, weapon swinging) will be based on visual rotation, but physics interactions use the non-rotating capsule
-Example: Player appears to swing a sword to the right, but collision detection uses the original forward direction
-3. Combat/Damage System Issues.
-Problem: If you implement directional damage, attack ranges, or shield mechanics, the mismatch becomes problematic
-Example: Enemy attacks from the character's visual "back" but hits the circular collider from any direction
-4. Advanced Movement Features.
-Problem: Features like wall-running, climbing, or directional dodging become harder to implement
-Example: Character visually faces a wall to climb it, but physics body has no "front" direction.
- */
