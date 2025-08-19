@@ -106,7 +106,6 @@ export function RoomProvider({ children }) {
       if (newRoom) {
         // Only update if room has changed
         if (!currentRoom || newRoom.id !== currentRoom.id) {
-          console.log(`Player entered room: ${newRoom.id}`);
           setCurrentRoom(newRoom);
         }
       }

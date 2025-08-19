@@ -43,8 +43,6 @@ export function ModelSelectorUI() {
 
   // Preload essential models when component mounts
   useEffect(() => {
-    console.log("Preloading essential models...");
-
     // Only preload the first few models of each category to avoid overloading
     const essentialModels = [];
     const categories = {};
@@ -70,7 +68,6 @@ export function ModelSelectorUI() {
 
   const handleSelectModel = (model) => {
     // Preload the selected model before setting it
-    console.log("Preloading selected model:", model.id);
     useGLTF.preload(model.path);
 
     // Create a modified model with the selected scale and corresponding grid dimensions

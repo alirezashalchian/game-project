@@ -25,7 +25,6 @@ export const DynamicRoomManager = () => {
 
   // Initialize room data when component mounts
   useEffect(() => {
-    console.log("Initializing room data...");
     initializeRoomData();
 
     // Set initial active rooms based on default room
@@ -48,9 +47,6 @@ export const DynamicRoomManager = () => {
 
     setActiveRooms(initialRooms);
     prevRoomsRef.current = new Set(realRoomIds);
-    console.log(
-      `Initial rooms: ${realRoomIds.length} real rooms, ${initialRoomIds.length - realRoomIds.length} phantom rooms (total adjacent: ${initialRoomIds.length})`
-    );
   }, []);
 
   // Create refs for each active room - memoized to avoid recreation
@@ -87,12 +83,6 @@ export const DynamicRoomManager = () => {
       return;
     }
 
-    // Log room transition details
-    const phantomCount = allRoomIdsToRender.length - realRoomIdsToRender.length;
-    console.log(
-      `Room transition for ${currentRoom.id}: rendering ${realRoomIdsToRender.length} real rooms, ${phantomCount} phantom rooms (total adjacent: ${allRoomIdsToRender.length})`
-    );
-
     // Calculate new rooms with position data (only real rooms)
     const roomsToRender = realRoomIdsToRender.map((id) => {
       const coords = getCoordsFromRoomId(id);
@@ -112,7 +102,6 @@ export const DynamicRoomManager = () => {
   useEffect(() => {
     const timerId = setTimeout(() => {
       setRoomsReady(true);
-      console.log("Rooms ready for registration");
     }, 500);
 
     return () => clearTimeout(timerId);

@@ -33,7 +33,6 @@ export const initializeRoomData = () => {
       }
     }
   }
-  console.log(`Room data initialized for all ${gridSize * gridSize * gridSize} rooms`);
 };
 
 /**
