@@ -39,7 +39,7 @@ root.render(
         <ModelSelectorUI />
         <Canvas
           shadows
-          camera={{ position: [0, 4, -10], fov: 45 }}
+          camera={{ fov: 75 }}
           style={{ position: "fixed", top: 0, left: 0 }}
         >
           <Physics gravity={[0, 0, 0]}>
