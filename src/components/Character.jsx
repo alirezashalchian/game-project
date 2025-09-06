@@ -65,7 +65,7 @@ export default function Mage() {
 
   // Place character slightly off center on the floor to avoid hole in middle
   const floorHeight = roomPosition[1] - roomConfig.innerSize / 2;
-  const initialY = floorHeight + capsuleRadius + capsuleHalfHeight + 0.5 + 1;
+  const initialY = floorHeight + capsuleRadius + capsuleHalfHeight;
   // Offset character 2 units from center to avoid central hole
   const initialPosition = [roomPosition[0] + 2, initialY, roomPosition[2] + 2];
 
@@ -356,6 +356,17 @@ export default function Mage() {
   // Update physics and camera each frame
   useFrame((state, delta) => {
     if (!rigidBodyRef.current || !mageRef.current) return;
+
+    // HYBRID APPROACH: Handle large deltas from tab reactivation
+    if (delta > 0.5) {
+      // 100ms threshold - indicates tab was inactive
+      // Reset physics state to prevent falling through geometry
+      rigidBodyRef.current.setLinvel({ x: 0, y: 0, z: 0 });
+      rigidBodyRef.current.setAngvel({ x: 0, y: 0, z: 0 });
+
+      // Skip this frame entirely to avoid temporal inconsistencies
+      return;
+    }
 
     // Get character position for camera positioning
     const position = rigidBodyRef.current.translation();
