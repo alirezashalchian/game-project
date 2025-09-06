@@ -18,12 +18,8 @@ export default function MultiplayerManager() {
         }
 
         return (
-          <group name="multiplayer-players">
-            <OtherPlayer
-              key={sessionId}
-              sessionId={sessionId}
-              playerData={playerData}
-            />
+          <group key={sessionId} name="multiplayer-players">
+            <OtherPlayer sessionId={sessionId} playerData={playerData} />
           </group>
         );
       })}
