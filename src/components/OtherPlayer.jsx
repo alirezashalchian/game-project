@@ -30,9 +30,26 @@ export default function OtherPlayer({ playerData, sessionId }) {
   const currentActionRef = useRef(null);
   const lastUpdateTime = useRef(0);
 
-  // Optimized smoothing
-  const [smoothedPosition] = useState(() => new THREE.Vector3());
-  const [smoothedQuaternion] = useState(() => new THREE.Quaternion());
+  // Optimized smoothing - initialize with player position if available
+  const [smoothedPosition] = useState(() =>
+    playerData
+      ? new THREE.Vector3(
+          playerData.position.x,
+          playerData.position.y,
+          playerData.position.z
+        )
+      : new THREE.Vector3()
+  );
+  const [smoothedQuaternion] = useState(() =>
+    playerData
+      ? new THREE.Quaternion(
+          playerData.quaternion.x,
+          playerData.quaternion.y,
+          playerData.quaternion.z,
+          playerData.quaternion.w
+        )
+      : new THREE.Quaternion()
+  );
   const [targetPosition] = useState(() => new THREE.Vector3());
   const [targetQuaternion] = useState(() => new THREE.Quaternion());
 
@@ -57,6 +74,24 @@ export default function OtherPlayer({ playerData, sessionId }) {
     (data) => {
       if (!data) return;
 
+      const newPosition = new THREE.Vector3(
+        data.position.x,
+        data.position.y,
+        data.position.z
+      );
+
+      // If this is a very large jump (>20 units), likely from tab switching - snap immediately
+      const distance = smoothedPosition.distanceTo(newPosition);
+      if (distance > 1) {
+        smoothedPosition.copy(newPosition);
+        smoothedQuaternion.set(
+          data.quaternion.x,
+          data.quaternion.y,
+          data.quaternion.z,
+          data.quaternion.w
+        );
+      }
+
       targetPosition.set(data.position.x, data.position.y, data.position.z);
       targetQuaternion.set(
         data.quaternion.x,
@@ -71,30 +106,20 @@ export default function OtherPlayer({ playerData, sessionId }) {
         playAction(animations.actions[animationName]);
       }
     },
-    [animations.actions, playAction, targetPosition, targetQuaternion]
+    [
+      animations.actions,
+      playAction,
+      targetPosition,
+      targetQuaternion,
+      smoothedPosition,
+      smoothedQuaternion,
+    ]
   );
 
   // Update targets when player data changes
   useEffect(() => {
     updateTargets(playerData);
   }, [playerData, updateTargets]);
-
-  // Initialize smoothed values on first render only
-  useEffect(() => {
-    if (playerData) {
-      smoothedPosition.set(
-        playerData.position.x,
-        playerData.position.y,
-        playerData.position.z
-      );
-      smoothedQuaternion.set(
-        playerData.quaternion.x,
-        playerData.quaternion.y,
-        playerData.quaternion.z,
-        playerData.quaternion.w
-      );
-    }
-  }, []); // Only run once
 
   // Cleanup cached scene when component unmounts
   useEffect(() => {
@@ -121,6 +146,23 @@ export default function OtherPlayer({ playerData, sessionId }) {
   // Optimized frame updates with throttling
   useFrame((state, delta) => {
     if (!groupRef.current || !playerData) return;
+
+    if (delta > 0.5) {
+      groupRef.current.position.set(
+        playerData.position.x,
+        playerData.position.y,
+        playerData.position.z
+      );
+      groupRef.current.quaternion.set(
+        playerData.quaternion.x,
+        playerData.quaternion.y,
+        playerData.quaternion.z,
+        playerData.quaternion.w
+      );
+      smoothedPosition.copy(groupRef.current.position);
+      smoothedQuaternion.copy(groupRef.current.quaternion);
+      return;
+    }
 
     const currentTime = state.clock.elapsedTime;
 
