@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Card } from "@/components/ui/card";
@@ -18,14 +20,6 @@ const gameTips = [
   "Tip: Team up with friends for bigger adventures!",
   "Tip: Experiment with different building materials!",
   "Tip: Save your progress frequently during long builds!",
-];
-
-const characters = [
-  { src: "/characters/knight.png", alt: "Knight", delay: "0s" },
-  { src: "/characters/rogue.png", alt: "Rogue", delay: "0.5s" },
-  { src: "/characters/mage.png", alt: "Mage", delay: "1s" },
-  { src: "/characters/barbarian.png", alt: "Barbarian", delay: "1.5s" },
-  { src: "/characters/rogue_hooded.png", alt: "Hooded Rogue", delay: "2s" },
 ];
 
 export default function GameLoadingPage({ progress = 0, onComplete }) {
@@ -72,107 +66,6 @@ export default function GameLoadingPage({ progress = 0, onComplete }) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-8 overflow-hidden relative">
-      {/* Floating Characters */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* Knight - Top Left */}
-        <div
-          className="absolute float-animation flex items-center justify-center"
-          style={{
-            left: "8%",
-            top: "12%",
-            animationDelay: "0s",
-            animationDuration: "3s",
-            width: "300px",
-            height: "300px",
-          }}
-        >
-          <img
-            src="/characters/knight.png"
-            alt="Knight"
-            className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 xl:w-[28rem] xl:h-[28rem] 2xl:w-[32rem] 2xl:h-[32rem] drop-shadow-lg object-contain"
-          />
-        </div>
-
-        {/* Barbarian - Top Right */}
-        <div
-          className="absolute float-animation flex items-center justify-center"
-          style={{
-            right: "8%",
-            top: "12%",
-            animationDelay: "1.5s",
-            animationDuration: "3.5s",
-            width: "300px",
-            height: "300px",
-          }}
-        >
-          <img
-            src="/characters/barbarian.png"
-            alt="Barbarian"
-            className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 xl:w-[28rem] xl:h-[28rem] 2xl:w-[32rem] 2xl:h-[32rem] drop-shadow-lg object-contain"
-          />
-        </div>
-
-        {/* Rogue - Middle Left */}
-        <div
-          className="absolute float-animation flex items-center justify-center"
-          style={{
-            left: "3%",
-            top: "42%",
-            animationDelay: "0.5s",
-            animationDuration: "3.2s",
-            width: "300px",
-            height: "300px",
-          }}
-        >
-          <img
-            src="/characters/rogue.png"
-            alt="Rogue"
-            className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 xl:w-[28rem] xl:h-[28rem] 2xl:w-[32rem] 2xl:h-[32rem] drop-shadow-lg object-contain"
-          />
-        </div>
-
-        {/* Hooded Rogue - Middle Right */}
-        <div
-          className="absolute float-animation flex items-center justify-center"
-          style={{
-            right: "3%",
-            top: "42%",
-            animationDelay: "2s",
-            animationDuration: "3.8s",
-            width: "300px",
-            height: "300px",
-          }}
-        >
-          <img
-            src="/characters/rogue_hooded.png"
-            alt="Hooded Rogue"
-            className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 xl:w-[28rem] xl:h-[28rem] 2xl:w-[32rem] 2xl:h-[32rem] drop-shadow-lg object-contain"
-          />
-        </div>
-
-        {/* Mage - Top Center above Block Quest */}
-        <div
-          className="absolute flex items-center justify-center"
-          style={{
-            left: "50%",
-            top: "2%",
-            transform: "translateX(-50%)",
-            width: "300px",
-            height: "300px",
-          }}
-        >
-          <img
-            src="/characters/mage.png"
-            alt="Mage"
-            className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 xl:w-[28rem] xl:h-[28rem] 2xl:w-[32rem] 2xl:h-[32rem] drop-shadow-lg object-contain gentle-float-animation"
-            style={{
-              animationDelay: "1s",
-              animationDuration: "4s",
-            }}
-          />
-        </div>
-      </div>
-
       {/* Main Loading Content */}
       <div className="z-10 text-center space-y-8 max-w-md w-full">
         {/* Game Title */}
