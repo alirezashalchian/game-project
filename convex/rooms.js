@@ -63,7 +63,7 @@ export const saveRoomData = mutation({
         placedAt: v.number(),
       })
     ),
-    ownerId: v.optional(v.string()),
+    ownerId: v.union(v.string(), v.null()),
   },
   handler: async (ctx, args) => {
     // Check if room already exists
@@ -130,7 +130,7 @@ export const addBlockToRoom = mutation({
       y: v.number(),
       z: v.number(),
     }),
-    ownerId: v.optional(v.string()),
+    ownerId: v.union(v.string(), v.null()),
   },
   handler: async (ctx, args) => {
     const existingRoom = await ctx.db
