@@ -13,7 +13,7 @@ export default defineSchema({
     }),
     
     // Room ownership and metadata
-    ownerId: v.optional(v.string()), // Player who owns this room
+    ownerId: v.union(v.string(), v.null()), // Player who owns this room (can be null)
     createdAt: v.number(), // Timestamp
     lastModified: v.number(), // Timestamp of last block change
     
