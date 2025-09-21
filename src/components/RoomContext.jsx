@@ -11,6 +11,8 @@ import {
   positionArrayToObject,
   getCoordsFromRoomId,
 } from "../utils/roomUtils";
+import { useRoomData } from "../hooks/useRoomData";
+import { modelCatalog } from "../models";
 
 const RoomContext = createContext(null);
 
@@ -29,6 +31,54 @@ export function RoomProvider({ children }) {
   const roomRefs = useRef([]);
   // Track last position to avoid unnecessary updates
   const lastPositionRef = useRef(null);
+
+  // Convex integration
+  const {
+    roomData,
+    isLoading: isRoomDataLoading,
+    addBlockToConvex,
+    removeBlockFromConvex,
+    updateBlockInConvex,
+    clearRoomInConvex,
+    convertConvexToModelFormat,
+  } = useRoomData(currentRoom?.id);
+
+  // Load room data from Convex when room changes
+  useEffect(() => {
+    if (!currentRoom) return;
+
+    if (roomData && roomData.placedBlocks) {
+      // Room exists in Convex - load the blocks
+      const convertedModels = roomData.placedBlocks.map((block) => {
+        const baseModel = convertConvexToModelFormat(block, currentRoom.id);
+
+        // Add back model catalog data
+        const catalogModel = modelCatalog.find((m) => m.id === block.modelId);
+        if (catalogModel) {
+          const finalModel = {
+            ...baseModel,
+            path: catalogModel.path,
+            category: catalogModel.category,
+            name: catalogModel.name,
+            rotatable: catalogModel.rotatable,
+            // ... other catalog properties
+          };
+
+          return finalModel;
+        }
+        return baseModel;
+      });
+
+      console.log(
+        `Loaded ${convertedModels.length} blocks for room ${currentRoom.id}`
+      );
+      setPlacedModels(convertedModels);
+    } else if (roomData === null || roomData === undefined) {
+      // Room doesn't exist in Convex yet - start with empty room
+      console.log(`Room ${currentRoom.id} is new - starting with empty room`);
+      setPlacedModels([]);
+    }
+  }, [roomData, currentRoom, convertConvexToModelFormat]);
 
   // Register a room
   const registerRoom = useCallback(
@@ -122,7 +172,7 @@ export function RoomProvider({ children }) {
 
   // Add a new model to the room
   const addModel = useCallback(
-    (modelData, position, rotation) => {
+    async (modelData, position, rotation) => {
       if (!currentRoom) return null;
 
       // Create a new model with all the required properties
@@ -138,25 +188,58 @@ export function RoomProvider({ children }) {
         gridDimensions: modelData.gridDimensions,
       };
 
+      // Update local state immediately for responsiveness
       setPlacedModels((prev) => [...prev, newModel]);
+
+      // Save to Convex asynchronously
+      try {
+        await addBlockToConvex(newModel, null); // Pass null as ownerId for now
+      } catch (error) {
+        console.error("Failed to save block to Convex:", error);
+        // Optionally revert local state on error
+        // setPlacedModels((prev) => prev.filter(model => model.id !== newModel.id));
+      }
+
       return newModel.id;
     },
-    [currentRoom]
+    [currentRoom, addBlockToConvex]
   );
 
   // Remove a model from the room
-  const removeModel = useCallback((modelId) => {
-    setPlacedModels((prev) => prev.filter((model) => model.id !== modelId));
-  }, []);
+  const removeModel = useCallback(
+    async (modelId) => {
+      // Update local state immediately
+      setPlacedModels((prev) => prev.filter((model) => model.id !== modelId));
+
+      // Remove from Convex asynchronously
+      try {
+        await removeBlockFromConvex(modelId);
+      } catch (error) {
+        console.error("Failed to remove block from Convex:", error);
+      }
+    },
+    [removeBlockFromConvex]
+  );
 
   // Move an existing model
-  const updateModelPosition = useCallback((modelId, position, rotation) => {
-    setPlacedModels((prev) =>
-      prev.map((model) =>
-        model.id === modelId ? { ...model, position, rotation } : model
-      )
-    );
-  }, []);
+  const updateModelPosition = useCallback(
+    async (modelId, position, rotation) => {
+      // Update local state immediately
+      setPlacedModels((prev) =>
+        prev.map((model) =>
+          model.id === modelId ? { ...model, position, rotation } : model
+        )
+      );
+
+      // Update in Convex asynchronously
+      try {
+        await updateBlockInConvex(modelId, { position, rotation });
+      } catch (error) {
+        console.error("Failed to update block in Convex:", error);
+      }
+    },
+    [updateBlockInConvex]
+  );
 
   // Update a placed model with new properties
   const updatePlacedModel = useCallback((updatedModel) => {
@@ -165,16 +248,30 @@ export function RoomProvider({ children }) {
     );
   }, []);
 
-  // Update all placed models (useful for loading saved designs)
-  const updateAllModels = useCallback((newModels) => {
-    setPlacedModels(newModels);
-  }, []);
-
   // Get current room grid coordinates
   const getCurrentRoomCoords = useCallback(() => {
     if (!currentRoom) return [4, 4, 4]; // Default to center of 9x9x9 complex
     return getCoordsFromRoomId(currentRoom.id);
   }, [currentRoom]);
+
+  // Note: Individual block operations are automatically saved
+  // No manual room saving needed
+
+  // Clear entire room
+  const clearRoom = useCallback(async () => {
+    if (!currentRoom) return;
+
+    try {
+      // Clear local state immediately
+      setPlacedModels([]);
+
+      // Clear from Convex asynchronously
+      await clearRoomInConvex();
+      console.log("Room cleared successfully");
+    } catch (error) {
+      console.error("Failed to clear room in Convex:", error);
+    }
+  }, [currentRoom, clearRoomInConvex]);
 
   return (
     <RoomContext.Provider
@@ -188,13 +285,15 @@ export function RoomProvider({ children }) {
         removeModel,
         updateModelPosition,
         updatePlacedModel,
-        updateAllModels,
         currentRoom,
         getCurrentRoomCoords,
         updateCurrentRoom,
         registerRoom,
         availableRooms,
         getModelsInCurrentRoom,
+        // Convex-specific functions
+        clearRoom,
+        isRoomDataLoading,
       }}
     >
       {children}
