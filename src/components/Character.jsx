@@ -28,6 +28,8 @@ export default function Mage() {
     setMageFloorSurface: setCurrentFloorSurface,
   } = useCharacter();
 
+  console.log(mage.animations);
+
   const rigidBodyRef = useRef();
   const mageRef = useRef();
   const capsuleRef = useRef();
@@ -65,7 +67,7 @@ export default function Mage() {
 
   // Place character slightly off center on the floor to avoid hole in middle
   const floorHeight = roomPosition[1] - roomConfig.innerSize / 2;
-  const initialY = floorHeight + capsuleRadius + capsuleHalfHeight;
+  const initialY = floorHeight + capsuleRadius + capsuleHalfHeight + 2;
   // Offset character 2 units from center to avoid central hole
   const initialPosition = [roomPosition[0] + 2, initialY, roomPosition[2] + 2];
 
