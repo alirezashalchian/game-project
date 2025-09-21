@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useGLTF, Html } from "@react-three/drei";
 import { RigidBody } from "@react-three/rapier";
 import { useRoom } from "./RoomContext";
@@ -13,7 +13,7 @@ const SELECTED_COLOR = new THREE.Color("#7289da"); // Discord blurple
 const HOVER_COLOR = new THREE.Color("#aaaaaa"); // Light gray
 
 export function PlacedModelsManager() {
-  const { placedModels, removeModel, isPlacementMode, updatePlacedModel } =
+  const { placedModels, removeModel, isPlacementMode, updateModelPosition } =
     useRoom();
   const [selectedPlacedModelId, setSelectedPlacedModelId] = useState(null);
   const [hoveredModelId, setHoveredModelId] = useState(null);
@@ -81,20 +81,22 @@ export function PlacedModelsManager() {
   };
 
   // Handle rotation of selected model
-  const handleRotateModel = (modelId) => {
-    const model = placedModels.find((model) => model.id === modelId);
-    if (model) {
-      const newRotation = [
-        model.rotation[0],
-        model.rotation[1] + Math.PI / 2, // Rotate 90 degrees on Y axis
-        model.rotation[2],
-      ];
+  const handleRotateModel = useCallback(
+    (modelId) => {
+      const model = placedModels.find((model) => model.id === modelId);
+      if (model) {
+        const newRotation = [
+          model.rotation[0],
+          model.rotation[1] + Math.PI / 2, // Rotate 90 degrees on Y axis
+          model.rotation[2],
+        ];
 
-      // Update the model's rotation using the context function
-      const updatedModel = { ...model, rotation: newRotation };
-      updatePlacedModel(updatedModel);
-    }
-  };
+        // Update the model's rotation using the context function (local state + Convex sync)
+        updateModelPosition(modelId, model.position, newRotation);
+      }
+    },
+    [placedModels, updateModelPosition]
+  );
 
   // Listen for keyboard shortcuts
   useEffect(() => {
