@@ -64,12 +64,14 @@ export function PlacementSystem() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "r" && selectedModel?.rotatable && isPlacementMode) {
-        // console.log("Rotating model");
-        setPlacementRotation((prev) => [
-          prev[0],
-          prev[1] + Math.PI / 2, // Rotate 90 degrees on Y axis
-          prev[2],
-        ]);
+        setPlacementRotation((prev) => {
+          const newRotation = [
+            prev[0],
+            prev[1] + Math.PI / 2, // Rotate 90 degrees on Y axis
+            prev[2],
+          ];
+          return newRotation;
+        });
       }
 
       // Cancel placement with ESC
@@ -623,6 +625,8 @@ export function PlacementSystem() {
 
     // Only add model if we're in a room
     if (currentRoom) {
+      // DEBUG: Log placement rotation before adding model
+
       // Add the model at the placement position
       addModel(selectedModel, placementPosition, placementRotation);
     }
