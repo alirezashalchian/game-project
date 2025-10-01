@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Card } from "@/components/ui/card";
@@ -22,7 +20,13 @@ const gameTips = [
   "Tip: Save your progress frequently during long builds!",
 ];
 
-export default function GameLoadingPage({ progress = 0, onComplete }) {
+export default function GameLoadingPage({
+  progress = 0,
+  stage = "Loading...",
+  errors = [],
+  hasErrors = false,
+  onComplete,
+}) {
   const [currentMessage, setCurrentMessage] = useState(0);
   const [currentTip, setCurrentTip] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(0);
@@ -78,6 +82,13 @@ export default function GameLoadingPage({ progress = 0, onComplete }) {
           </p>
         </div>
 
+        {/* Loading Stage */}
+        <div className="h-8">
+          <p className="text-lg font-medium text-secondary-foreground">
+            {stage}
+          </p>
+        </div>
+
         {/* Loading Message */}
         <div className="h-8">
           <p
@@ -93,14 +104,33 @@ export default function GameLoadingPage({ progress = 0, onComplete }) {
           <div className="relative">
             <Progress
               value={displayProgress}
-              className="h-4 bg-secondary pulse-glow rounded-full overflow-hidden"
+              className={`h-4 bg-secondary pulse-glow rounded-full overflow-hidden ${
+                hasErrors ? "border-2 border-yellow-500" : ""
+              }`}
             />
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse rounded-full" />
           </div>
           <p className="text-sm text-muted-foreground">
             {displayProgress}% Complete
+            {hasErrors && (
+              <span className="text-yellow-500 ml-2">(with warnings)</span>
+            )}
           </p>
         </div>
+
+        {/* Error Display */}
+        {hasErrors && errors.length > 0 && (
+          <Card className="p-3 bg-yellow-50 border-yellow-200">
+            <p className="text-sm font-medium text-yellow-800 mb-2">
+              Loading Warnings:
+            </p>
+            <ul className="text-xs text-yellow-700 space-y-1">
+              {errors.map((error, index) => (
+                <li key={index}>• {error}</li>
+              ))}
+            </ul>
+          </Card>
+        )}
 
         {/* Gaming Tips */}
         <Card className="p-4 bg-card/50 backdrop-blur-sm border-primary/20">
