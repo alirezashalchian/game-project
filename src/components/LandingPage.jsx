@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,31 +33,31 @@ export default function LandingPage({ onPlayNow }) {
     {
       name: "Knight",
       description: "Master of defense and honor",
-      image: "/characters/knight.png",
+      image: "/models/characters/knight.png",
       abilities: ["Shield Mastery", "Sword Combat", "Leadership"],
     },
     {
       name: "Mage",
       description: "Wielder of arcane powers",
-      image: "/characters/mage.png",
+      image: "/models/characters/mage.png",
       abilities: ["Elemental Magic", "Teleportation", "Enchantments"],
     },
     {
       name: "Barbarian",
       description: "Fierce warrior of the wilds",
-      image: "/characters/barbarian.png",
+      image: "/models/characters/barbarian.png",
       abilities: ["Berserker Rage", "Dual Wielding", "Intimidation"],
     },
     {
       name: "Rogue",
       description: "Master of stealth and precision",
-      image: "/characters/rogue.png",
+      image: "/models/characters/rogue.png",
       abilities: ["Stealth", "Lock Picking", "Critical Strikes"],
     },
     {
       name: "Hooded Rogue",
       description: "Shadow assassin extraordinaire",
-      image: "/characters/rogue_hooded.png",
+      image: "/models/characters/rogue_hooded.png",
       abilities: ["Shadow Step", "Poison Mastery", "Assassination"],
     },
   ];
@@ -228,7 +226,7 @@ export default function LandingPage({ onPlayNow }) {
                 {/* Floating characters around the video placeholder */}
                 <div className="absolute top-4 left-4">
                   <img
-                    src="/characters/knight.png"
+                    src="/models/characters/knight.png"
                     alt="Knight"
                     className="w-16 h-16 object-contain float-animation"
                     style={{ animationDelay: "0s" }}
@@ -236,7 +234,7 @@ export default function LandingPage({ onPlayNow }) {
                 </div>
                 <div className="absolute top-4 right-4">
                   <img
-                    src="/characters/mage.png"
+                    src="/models/characters/mage.png"
                     alt="Mage"
                     className="w-16 h-16 object-contain float-animation"
                     style={{ animationDelay: "0.5s" }}
@@ -244,7 +242,7 @@ export default function LandingPage({ onPlayNow }) {
                 </div>
                 <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
                   <img
-                    src="/characters/barbarian.png"
+                    src="/models/characters/barbarian.png"
                     alt="Barbarian"
                     className="w-16 h-16 object-contain float-animation"
                     style={{ animationDelay: "1s" }}
