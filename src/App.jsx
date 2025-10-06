@@ -1,24 +1,25 @@
 import React from "react";
-import Mage from "./components/Character";
-import MultiplayerManager from "./components/MultiplayerManager"; // Add this import
-import { ColyseusProvider } from "./context/ColyseusContext"; // Add this import
-import { PlacementSystem } from "./components/PlacementSystem";
-import { PlacedModelsManager } from "./components/PlacedModelsManager";
-import { DynamicRoomManager } from "./components/Room/DynamicRoomManager";
+import { Routes, Route, useNavigate } from "react-router-dom";
+import { ColyseusProvider } from "./context/ColyseusContext";
+import { ConvexWrapper } from "./context/ConvexContext";
+import LandingPage from "./components/LandingPage";
+import GamePage from "./components/GamePage";
 
-export default function RoomWithPhysics() {
+export default function App() {
+  const navigate = useNavigate();
+
+  const handlePlayNow = () => {
+    navigate("/game");
+  };
+
   return (
-    <ColyseusProvider>
-      {" "}
-      {/* Wrap everything in ColyseusProvider */}
-      {/* Global lighting */}
-      <ambientLight intensity={0.3} />
-      <DynamicRoomManager />
-      <Mage />
-      <MultiplayerManager /> {/* Add this component to render other players */}
-      <PlacementSystem />
-      <PlacedModelsManager />
-      <axesHelper args={[10]} />
-    </ColyseusProvider>
+    <ConvexWrapper>
+      <ColyseusProvider>
+        <Routes>
+          <Route path="/" element={<LandingPage onPlayNow={handlePlayNow} />} />
+          <Route path="/game" element={<GamePage />} />
+        </Routes>
+      </ColyseusProvider>
+    </ConvexWrapper>
   );
 }
