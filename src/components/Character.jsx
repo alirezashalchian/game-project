@@ -17,7 +17,7 @@ import {
 } from "../utils/surfaceUtils";
 
 export default function Mage() {
-  const mage = useGLTF("./models/characters/Mage.glb");
+  const mage = useGLTF("./models/characters/Barbarian.glb");
   const animations = useAnimations(mage.animations, mage.scene);
   const { updateCurrentRoom, getCurrentRoomCoords } = useRoom();
   const { sendPlayerUpdate, currentSessionId } = useColyseus(); // Add this line
@@ -27,8 +27,6 @@ export default function Mage() {
     mageFloorSurface: currentFloorSurface,
     setMageFloorSurface: setCurrentFloorSurface,
   } = useCharacter();
-
-  console.log(mage.animations);
 
   const rigidBodyRef = useRef();
   const mageRef = useRef();
