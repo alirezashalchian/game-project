@@ -4,6 +4,7 @@ import { ColyseusProvider } from "./context/ColyseusContext";
 import { ConvexWrapper } from "./context/ConvexContext";
 import LandingPage from "./components/LandingPage";
 import GamePage from "./components/GamePage";
+import BundlesPage from "./components/BundlesPage";
 
 export default function App() {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage onPlayNow={handlePlayNow} />} />
           <Route path="/game" element={<GamePage />} />
+          <Route path="/bundles" element={<BundlesPage />} />
         </Routes>
       </ColyseusProvider>
     </ConvexWrapper>
