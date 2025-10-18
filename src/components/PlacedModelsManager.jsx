@@ -19,6 +19,8 @@ export function PlacedModelsManager() {
   const [hoveredModelId, setHoveredModelId] = useState(null);
   const { raycaster, camera, pointer } = useThree();
   const groupRef = useRef();
+  const lastRaycastTime = useRef(0);
+  const raycastThrottleMs = 50; // Throttle raycasting to every 50ms (20 times/sec instead of 60)
 
   // Clear selection when entering placement mode
   useEffect(() => {
@@ -28,9 +30,16 @@ export function PlacedModelsManager() {
     }
   }, [isPlacementMode]);
 
-  // Handle raycasting to detect which model is being hovered
+  // Handle raycasting to detect which model is being hovered - OPTIMIZED with throttling
   const handlePointerMove = (e) => {
     if (isPlacementMode || !groupRef.current) return;
+
+    // Throttle raycasting for performance
+    const now = Date.now();
+    if (now - lastRaycastTime.current < raycastThrottleMs) {
+      return;
+    }
+    lastRaycastTime.current = now;
 
     // Update the picking ray with the camera and pointer position
     raycaster.setFromCamera(pointer, camera);
@@ -153,7 +162,7 @@ export function PlacedModelsManager() {
   );
 }
 
-function PlacedModel({
+const PlacedModel = React.memo(function PlacedModel({
   model,
   isSelected,
   isHovered,
@@ -296,4 +305,4 @@ function PlacedModel({
       )}
     </group>
   );
-}
+});
