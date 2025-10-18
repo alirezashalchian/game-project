@@ -32,15 +32,15 @@ export function useGameLoading() {
         console.log('Convex data loaded:', roomData ? `${roomData.placedBlocks?.length || 0} blocks` : 'empty room');
         setLoadingProgress(60);
 
-        // Step 2: Check Colyseus connection
-        setLoadingStage('Connecting to multiplayer...');
+        // Step 2: Check Colyseus connection (TEMPORARILY COMMENTED OUT)
+        // setLoadingStage('Connecting to multiplayer...');
         
-        if (!colyseusConnected) {
-          console.log('Waiting for Colyseus connection...');
-          return; // Exit and wait for connection
-        }
+        // if (!colyseusConnected) {
+        //   console.log('Waiting for Colyseus connection...');
+        //   return; // Exit and wait for connection
+        // }
 
-        console.log('Colyseus connected');
+        // console.log('Colyseus connected');
         setLoadingProgress(80);
 
         // Step 3: Everything is ready
