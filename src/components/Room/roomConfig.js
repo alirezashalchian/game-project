@@ -5,12 +5,12 @@ export const roomConfig = {
   wallThickness: 0.5, // Thickness of the walls
   doorSize: 3, // Size of the door opening in each wall (reduced to half)
   wallColors: {
-    front: "#607D8B", // Blue-gray
-    back: "#607D8B",
-    right: "#607D8B",
-    left: "#607D8B",
-    top: "#90A4AE", // Lighter blue-gray for ceiling
-    bottom: "#455A64", // Darker blue-gray for floor
+    front: "#FFB366", // Blue-gray
+    back: "#E6935C",
+    right: "#FF8C42",
+    left: "#FFB366",
+    top: "#FFB380", // Lighter blue-gray for ceiling
+    bottom: "#FF9B4D", // Darker blue-gray for floor
   },
   cellSize: 0.5, // Size of each grid cell for placement (renamed from gridCellSize)
 };
