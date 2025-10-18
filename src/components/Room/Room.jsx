@@ -6,48 +6,14 @@ import {
   roomConfig,
 } from "./roomConfig";
 
-// Room-specific light component
+// Room-specific light component - OPTIMIZED: Reduced from 5 lights to 1 simple light
 const RoomLight = () => (
   <>
-    {/* Main ambient lighting - soft overall illumination */}
-    <ambientLight intensity={0.1} color="#f5f5f5" />
-
-    {/* Primary ceiling light - simulates overhead lighting */}
-    <pointLight
-      position={[0, 6, 0]}
-      intensity={0.6}
+    {/* Single directional light per room - much more performant */}
+    <directionalLight
+      position={[0, 10, 0]}
+      intensity={0.4}
       color="#ffffff"
-      castShadow
-      distance={18}
-      decay={1.5}
-      shadow-mapSize-width={1024}
-      shadow-mapSize-height={1024}
-    />
-
-    {/* Secondary corner lights for depth */}
-    <pointLight
-      position={[5, 3, 5]}
-      intensity={0.3}
-      color="#fff8dc"
-      distance={12}
-      decay={2}
-    />
-
-    <pointLight
-      position={[-5, 3, -5]}
-      intensity={0.3}
-      color="#fff8dc"
-      distance={12}
-      decay={2}
-    />
-
-    {/* Floor accent light - subtle upward glow */}
-    <pointLight
-      position={[0, -6, 0]}
-      intensity={0.2}
-      color="#e6f3ff"
-      distance={8}
-      decay={2}
     />
   </>
 );
