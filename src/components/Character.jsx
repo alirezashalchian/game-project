@@ -353,9 +353,15 @@ export default function Mage() {
     currentActionRef.current = newAction;
   };
 
+  // PERFORMANCE: Track frame count for throttling expensive operations
+  const frameCountRef = useRef(0);
+
   // Update physics and camera each frame
   useFrame((state, delta) => {
     if (!rigidBodyRef.current || !mageRef.current) return;
+
+    // PERFORMANCE: Increment frame counter
+    frameCountRef.current++;
 
     // HYBRID APPROACH: Handle large deltas from tab reactivation
     if (delta > 0.5) {
@@ -368,6 +374,9 @@ export default function Mage() {
       return;
     }
 
+    // PERFORMANCE: Clamp delta to prevent physics issues
+    delta = Math.min(delta, 0.1);
+
     // Get character position for camera positioning
     const position = rigidBodyRef.current.translation();
     const characterPosition = new THREE.Vector3(
@@ -376,8 +385,10 @@ export default function Mage() {
       position.z
     );
 
-    // Update current room based on character position
-    updateCurrentRoom([position.x, position.y, position.z]);
+    // PERFORMANCE: Update current room only every 10 frames (reduces overhead)
+    if (frameCountRef.current % 10 === 0) {
+      updateCurrentRoom([position.x, position.y, position.z]);
+    }
 
     // Update camera pause timer
     if (characterState.current.cameraPaused) {
@@ -643,7 +654,8 @@ export default function Mage() {
     }
 
     // MULTIPLAYER UPDATE: Send player data to server
-    if (sendPlayerUpdate && currentSessionId) {
+    // PERFORMANCE: Only check/send every 3 frames (reduces network/CPU overhead)
+    if (sendPlayerUpdate && currentSessionId && frameCountRef.current % 3 === 0) {
       const currentRoomCoords = getCurrentRoomCoords();
 
       const updateData = {
