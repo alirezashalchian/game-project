@@ -1,5 +1,6 @@
 import React from "react";
 import { useRoom } from "./RoomContext";
+import { Button } from "./ui/button";
 
 export function SaveSystem() {
   const { placedModels, clearRoom, isRoomDataLoading, currentRoom } = useRoom();
@@ -18,14 +19,21 @@ export function SaveSystem() {
 
   return (
     <div className="save-system-ui">
-      <button onClick={handleClear} className="clear-btn">
-        Clear Room
-      </button>
+      {/* Use the shadcn/ui Button, matching GravityChangeUI style */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+        <Button
+          className="bg-purple-600 text-white hover:bg-purple-700"
+          variant="outline"
+          size="sm"
+          onClick={handleClear}
+        >
+          Clear Room
+        </Button>
+      </div>
 
       <div className="info">
         <p>Room: {currentRoom?.id || "No room"}</p>
         <p>Blocks: {placedModels.length}</p>
-        <p>✅ Auto-saves to Convex automatically</p>
         {isRoomDataLoading && <p>🔄 Loading room data...</p>}
       </div>
     </div>
