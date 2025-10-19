@@ -9,11 +9,11 @@ export default function RoomWithPhysics() {
   return (
     <>
       {/* OPTIMIZED Global lighting - single ambient + single hemisphere light */}
-      <ambientLight intensity={0.5} />
+      <ambientLight intensity={1} />
       <hemisphereLight 
-        skyColor="#ffffff" 
+        skyColor="#ffffff"
         groundColor="#888888" 
-        intensity={0.6} 
+        intensity={0.85}
       />
       <DynamicRoomManager />
       <Mage />
