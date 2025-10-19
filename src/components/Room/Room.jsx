@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Wall } from "../Wall/Wall";
 import {
   generateWallConfigs,
@@ -7,44 +7,55 @@ import {
 } from "./roomConfig";
 
 // Room-specific light component - OPTIMIZED: Reduced from 5 lights to 1 simple light
-const RoomLight = () => (
-  <>
-    {/* Single directional light per room - much more performant */}
-    <directionalLight
-      position={[0, 10, 0]}
-      intensity={0.4}
-      color="#ffffff"
-    />
-  </>
-);
+const RoomLight = () => {
+  const lightRef = useRef();
+  const targetRef = useRef();
 
-export const Room = React.memo(({ roomRef, roomId, position = [0, 0, 0] }) => {
+  useEffect(() => {
+    if (lightRef.current && targetRef.current) {
+      lightRef.current.target = targetRef.current; // target becomes local to this room
+    }
+  }, []);
+
+  return (
+    <>
+      <spotLight
+        ref={lightRef}
+        position={[0, 10, 0]}
+        decay={0}
+        penumbra={0.15}
+        intensity={0.75}
+        distance={roomConfig.innerSize * 1.6}
+        angle={0.75}
+        color="#ffffff"
+      />
+      <object3D ref={targetRef} position={[0, 0, 0]} /> {/* room center */}
+    </>
+  );
+};
+
+export const Room = React.memo(({ roomRef, roomId, position = [0, 0, 0], isActive = false }) => {
   // Generate wall configurations for this room (now with roomId for door logic)
   const wallConfigs = generateWallConfigs(roomId);
 
-  // Calculate room boundaries
-  const roomBoundaries = calculateRoomBoundaries(position);
-
-  // Store room information
-  const roomInfo = {
-    id: roomId,
-    position,
-    innerSize: roomConfig.innerSize,
-    outerSize: roomConfig.outerSize,
-    boundaries: roomBoundaries,
-  };
-
   // Store room info in ref for external access
   useEffect(() => {
-    if (roomRef) {
-      roomRef.current = roomInfo;
-    }
-  }, [roomRef, roomId, roomInfo]);
+    if (!roomRef) return;
+    const boundaries = calculateRoomBoundaries(position);
+    const info = {
+      id: roomId,
+      position,
+      innerSize: roomConfig.innerSize,
+      outerSize: roomConfig.outerSize,
+      boundaries,
+    };
+    roomRef.current = info;
+  }, [roomRef, roomId, position]);
 
   return (
     <group position={position}>
       {/* Room-specific lighting */}
-      <RoomLight />
+      {isActive && <RoomLight />}
 
       {/* Walls */}
       {wallConfigs.map((config, index) => (
