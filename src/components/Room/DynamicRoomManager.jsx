@@ -47,7 +47,7 @@ export const DynamicRoomManager = () => {
 
     setActiveRooms(initialRooms);
     prevRoomsRef.current = new Set(realRoomIds);
-  }, []);
+  }, [defaultRoomId]);
 
   // Create refs for each active room - memoized to avoid recreation
   const ensureRoomRefs = useMemo(() => {
@@ -119,6 +119,11 @@ export const DynamicRoomManager = () => {
     });
   }, [roomsReady, registerRoom, activeRooms, ensureRoomRefs]);
 
+  const activeRoomId = useMemo(
+    () => (currentRoom ? currentRoom.id : defaultRoomId),
+    [currentRoom, defaultRoomId]
+  );
+
   return (
     <>
       {activeRooms.map((room) => (
@@ -127,6 +132,7 @@ export const DynamicRoomManager = () => {
           roomId={room.id}
           position={room.position}
           roomRef={roomRefs.current[room.id]}
+          isActive={activeRoomId === room.id}
         />
       ))}
     </>
