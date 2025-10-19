@@ -5,11 +5,11 @@ import { roomConfig } from "../Room/roomConfig";
 export const WallPiece = ({ position, size, type }) => (
   <mesh position={position} castShadow receiveShadow>
     <boxGeometry args={size} />
-    <meshBasicMaterial
+    <meshStandardMaterial
       color={roomConfig.wallColors[type]}
       transparent={true}
-      roughness={0.75}
-      metalness={0.1}
+      roughness={0.5}
+      metalness={0.5}
       side={THREE.DoubleSide}
     />
   </mesh>
