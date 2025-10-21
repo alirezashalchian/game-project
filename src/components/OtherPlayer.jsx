@@ -53,10 +53,16 @@ export default function OtherPlayer({ playerData, sessionId }) {
   const [targetPosition] = useState(() => new THREE.Vector3());
   const [targetQuaternion] = useState(() => new THREE.Quaternion());
 
+  // Interpolation snapshot buffer (timestamped)
+  const snapshotsRef = useRef([]); // { timeMs, position: Vector3, quaternion: Quaternion }
+
   // Performance constants
-  const LERP_FACTOR = 12;
-  const ROTATION_LERP_FACTOR = 15;
   const UPDATE_THRESHOLD = 0.016; // ~60fps throttling
+  const INTERP_DELAY_MS = 120; // buffer by ~2 frames
+  const SNAP_DISTANCE = 0.02;
+  const SNAP_ANGLE = 0.01; // radians
+  const TELEPORT_DISTANCE = 6; // snap if jump exceeds this
+  const SNAPSHOT_WINDOW_MS = 1500; // keep 1.5s of history
   const modelYOffset = -0.75;
 
   // Optimized animation switching
@@ -80,18 +86,6 @@ export default function OtherPlayer({ playerData, sessionId }) {
         data.position.z
       );
 
-      // If this is a very large jump (>20 units), likely from tab switching - snap immediately
-      const distance = smoothedPosition.distanceTo(newPosition);
-      if (distance > 1) {
-        smoothedPosition.copy(newPosition);
-        smoothedQuaternion.set(
-          data.quaternion.x,
-          data.quaternion.y,
-          data.quaternion.z,
-          data.quaternion.w
-        );
-      }
-
       targetPosition.set(data.position.x, data.position.y, data.position.z);
       targetQuaternion.set(
         data.quaternion.x,
@@ -100,20 +94,35 @@ export default function OtherPlayer({ playerData, sessionId }) {
         data.quaternion.w
       );
 
+      // Push into snapshot buffer with timestamp
+      const now = performance.now();
+      snapshotsRef.current.push({
+        timeMs: now,
+        position: newPosition.clone(),
+        quaternion: new THREE.Quaternion(
+          data.quaternion.x,
+          data.quaternion.y,
+          data.quaternion.z,
+          data.quaternion.w
+        ),
+      });
+
+      // Trim old snapshots
+      const cutoff = now - SNAPSHOT_WINDOW_MS;
+      while (
+        snapshotsRef.current.length > 0 &&
+        snapshotsRef.current[0].timeMs < cutoff
+      ) {
+        snapshotsRef.current.shift();
+      }
+
       // Handle animation with validation
       const animationName = data.animation;
       if (animations.actions && animations.actions[animationName]) {
         playAction(animations.actions[animationName]);
       }
     },
-    [
-      animations.actions,
-      playAction,
-      targetPosition,
-      targetQuaternion,
-      smoothedPosition,
-      smoothedQuaternion,
-    ]
+    [animations.actions, playAction, targetPosition, targetQuaternion]
   );
 
   // Update targets when player data changes
@@ -148,19 +157,28 @@ export default function OtherPlayer({ playerData, sessionId }) {
     if (!groupRef.current || !playerData) return;
 
     if (delta > 0.5) {
-      groupRef.current.position.set(
-        playerData.position.x,
-        playerData.position.y,
-        playerData.position.z
-      );
-      groupRef.current.quaternion.set(
-        playerData.quaternion.x,
-        playerData.quaternion.y,
-        playerData.quaternion.z,
-        playerData.quaternion.w
-      );
-      smoothedPosition.copy(groupRef.current.position);
-      smoothedQuaternion.copy(groupRef.current.quaternion);
+      // On tab inactivity, snap to most recent snapshot if available
+      const latest = snapshotsRef.current[snapshotsRef.current.length - 1];
+      if (latest) {
+        groupRef.current.position.copy(latest.position);
+        groupRef.current.quaternion.copy(latest.quaternion);
+        smoothedPosition.copy(latest.position);
+        smoothedQuaternion.copy(latest.quaternion);
+      } else {
+        groupRef.current.position.set(
+          playerData.position.x,
+          playerData.position.y,
+          playerData.position.z
+        );
+        groupRef.current.quaternion.set(
+          playerData.quaternion.x,
+          playerData.quaternion.y,
+          playerData.quaternion.z,
+          playerData.quaternion.w
+        );
+        smoothedPosition.copy(groupRef.current.position);
+        smoothedQuaternion.copy(groupRef.current.quaternion);
+      }
       return;
     }
 
@@ -170,20 +188,53 @@ export default function OtherPlayer({ playerData, sessionId }) {
     if (currentTime - lastUpdateTime.current < UPDATE_THRESHOLD) return;
     lastUpdateTime.current = currentTime;
 
-    // Optional: Distance-based LOD optimization
-    const cameraPosition = state.camera.position;
-    const playerPosition = groupRef.current.position;
-    const distance = cameraPosition.distanceTo(playerPosition);
+    // Time-based interpolation using snapshot buffer
+    const now = performance.now();
+    const renderTime = now - INTERP_DELAY_MS;
 
-    // Adjust lerp speed based on distance
-    const distanceFactor = Math.min(distance / 15, 1); // Max distance of 15 units
-    const adjustedLerpPosition = LERP_FACTOR * (1 - distanceFactor * 0.3);
-    const adjustedLerpRotation =
-      ROTATION_LERP_FACTOR * (1 - distanceFactor * 0.3);
+    const snapshots = snapshotsRef.current;
+    // Ensure we have at least one snapshot
+    if (snapshots.length > 0) {
+      // Find bracketing snapshots
+      let i = snapshots.length - 1;
+      while (i > 0 && snapshots[i - 1].timeMs > renderTime) i--;
 
-    // Smooth interpolation
-    smoothedPosition.lerp(targetPosition, adjustedLerpPosition * delta);
-    smoothedQuaternion.slerp(targetQuaternion, adjustedLerpRotation * delta);
+      const prev = snapshots[Math.max(i - 1, 0)];
+      const next = snapshots[i];
+
+      let samplePosition = next.position;
+      let sampleQuaternion = next.quaternion;
+
+      if (prev && next && next.timeMs !== prev.timeMs) {
+        const t = THREE.MathUtils.clamp(
+          (renderTime - prev.timeMs) / (next.timeMs - prev.timeMs),
+          0,
+          1
+        );
+
+        // Teleport detection
+        const gapDist = prev.position.distanceTo(next.position);
+        if (gapDist > TELEPORT_DISTANCE) {
+          samplePosition = next.position;
+          sampleQuaternion = next.quaternion;
+          // On teleport, snap smoothed immediately to avoid slide/backtrack
+          smoothedPosition.copy(samplePosition);
+          smoothedQuaternion.copy(sampleQuaternion);
+        } else {
+          // Interpolate position and rotation
+          samplePosition = prev.position.clone().lerp(next.position, t);
+          sampleQuaternion = prev.quaternion.clone().slerp(next.quaternion, t);
+        }
+      }
+
+      // Apply directly to match main character feel (no extra easing)
+      smoothedPosition.copy(samplePosition);
+      smoothedQuaternion.copy(sampleQuaternion);
+    } else {
+      // Fallback to last target
+      smoothedPosition.copy(targetPosition);
+      smoothedQuaternion.copy(targetQuaternion);
+    }
 
     // Apply transforms
     groupRef.current.position.copy(smoothedPosition);

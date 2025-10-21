@@ -108,14 +108,14 @@ export default function Mage() {
   const shouldSendUpdate = (currentData) => {
     const lastData = lastSentData.current;
 
-    // Check position change (threshold: 0.1 units)
+    // Check position change (threshold: 0.02 units)
     if (
       !lastData.position ||
       Math.sqrt(
         Math.pow(currentData.position.x - lastData.position.x, 2) +
           Math.pow(currentData.position.y - lastData.position.y, 2) +
           Math.pow(currentData.position.z - lastData.position.z, 2)
-      ) > 0.1
+      ) > 0.02
     ) {
       return true;
     }
@@ -691,7 +691,8 @@ export default function Mage() {
       };
 
       // Only send update if there's a significant change
-      if (shouldSendUpdate(updateData)) {
+      // Also ensure we send an update when transitioning to Idle to finalize stop
+      if (shouldSendUpdate(updateData) || currentAnimationName === "Idle") {
         sendPlayerUpdate(updateData);
 
         // Update last sent data
