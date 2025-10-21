@@ -533,10 +533,16 @@ export default function Mage() {
         moveDirection.sub(surfaceForward);
       }
 
+      // Air control scaling
+      const airSpeedFactor = fallingStateRef.current.isFalling ? 0.6 : 1.0;
+      const airAccelFactor = fallingStateRef.current.isFalling ? 0.6 : 1.0;
+
       const targetVelocity = new THREE.Vector3();
       if (moveDirection.length() > 0) {
         moveDirection.normalize();
-        moveDirection.multiplyScalar(characterState.current.moveSpeed);
+        moveDirection.multiplyScalar(
+          characterState.current.moveSpeed * airSpeedFactor
+        );
         targetVelocity.copy(moveDirection);
       }
 
@@ -545,15 +551,23 @@ export default function Mage() {
         currentVel.y,
         currentVel.z
       );
+      // Remove velocity component along gravity so WASD doesn't counteract falling
+      const horizontalCurrent = currentVelocity
+        .clone()
+        .addScaledVector(
+          gravityDirection,
+          -currentVelocity.dot(gravityDirection)
+        );
+
       const velocityDiff = new THREE.Vector3();
-      velocityDiff.subVectors(targetVelocity, currentVelocity);
+      velocityDiff.subVectors(targetVelocity, horizontalCurrent);
 
       const accelerationRate =
         moveDirection.length() > 0
           ? characterState.current.acceleration
           : characterState.current.deceleration;
 
-      velocityDiff.multiplyScalar(accelerationRate * delta);
+      velocityDiff.multiplyScalar(accelerationRate * airAccelFactor * delta);
       rigidBodyRef.current.applyImpulse(
         { x: velocityDiff.x, y: velocityDiff.y, z: velocityDiff.z },
         true
@@ -561,7 +575,7 @@ export default function Mage() {
     }
 
     // Apply gravity force each frame
-    const gravityStrength = 5;
+    const gravityStrength = 1.25 ;
     rigidBodyRef.current.applyImpulse(
       {
         x: currentGravity[0] * delta * gravityStrength,

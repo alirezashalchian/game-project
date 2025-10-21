@@ -379,29 +379,41 @@ export default function Barbarian() {
         moveDirection.sub(surfaceForward);
       }
 
+      // Air control scaling
+      const airSpeedFactor = fallingStateRef.current.isFalling ? 0.6 : 1.0;
+      const airAccelFactor = fallingStateRef.current.isFalling ? 0.6 : 1.0;
+
       // Apply movement (preserve current velocity in gravity direction)
       const targetVelocity = new THREE.Vector3();
       if (moveDirection.length() > 0) {
         moveDirection.normalize();
-        moveDirection.multiplyScalar(characterState.current.moveSpeed);
+        moveDirection.multiplyScalar(
+          characterState.current.moveSpeed * airSpeedFactor
+        );
         targetVelocity.copy(moveDirection);
       }
 
-      // Preserve current velocity to maintain gravity/physics
+      // Preserve current velocity to maintain gravity/physics, remove gravity component
       const currentVelocity = new THREE.Vector3(
         currentVel.x,
         currentVel.y,
         currentVel.z
       );
+      const horizontalCurrent = currentVelocity
+        .clone()
+        .addScaledVector(
+          gravityDirection,
+          -currentVelocity.dot(gravityDirection)
+        );
       const velocityDiff = new THREE.Vector3();
-      velocityDiff.subVectors(targetVelocity, currentVelocity);
+      velocityDiff.subVectors(targetVelocity, horizontalCurrent);
 
       const accelerationRate =
         moveDirection.length() > 0
           ? characterState.current.acceleration
           : characterState.current.deceleration;
 
-      velocityDiff.multiplyScalar(accelerationRate * delta);
+      velocityDiff.multiplyScalar(accelerationRate * airAccelFactor * delta);
       rigidBodyRef.current.applyImpulse(
         { x: velocityDiff.x, y: velocityDiff.y, z: velocityDiff.z },
         true
@@ -409,7 +421,7 @@ export default function Barbarian() {
     }
 
     // Apply gravity force each frame (using current gravity direction)
-    const gravityStrength = 5;
+    const gravityStrength = 3;
     rigidBodyRef.current.applyImpulse(
       {
         x: currentGravity[0] * delta * gravityStrength,
