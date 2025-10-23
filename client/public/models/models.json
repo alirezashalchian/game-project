@@ -1,0 +1,242 @@
+[
+    {
+        "name": "bricks_A",
+        "path": "/models/gltf/bricks_A.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "bricks_B",
+        "path": "/models/gltf/bricks_B.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "colored_block_blue",
+        "path": "/models/gltf/colored_block_blue.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "colored_block_green",
+        "path": "/models/gltf/colored_block_green.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "colored_block_red",
+        "path": "/models/gltf/colored_block_red.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "colored_block_yellow",
+        "path": "/models/gltf/colored_block_yellow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "decorative_block_blue",
+        "path": "/models/gltf/decorative_block_blue.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "decorative_block_green",
+        "path": "/models/gltf/decorative_block_green.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "decorative_block_red",
+        "path": "/models/gltf/decorative_block_red.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "decorative_block_yellow",
+        "path": "/models/gltf/decorative_block_yellow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "dirt",
+        "path": "/models/gltf/dirt.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "dirt_with_grass",
+        "path": "/models/gltf/dirt_with_grass.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "dirt_with_snow",
+        "path": "/models/gltf/dirt_with_snow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "glass",
+        "path": "/models/gltf/glass.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "grass",
+        "path": "/models/gltf/grass.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "grass_with_snow",
+        "path": "/models/gltf/grass_with_snow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "gravel",
+        "path": "/models/gltf/gravel.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "gravel_with_grass",
+        "path": "/models/gltf/gravel_with_grass.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "gravel_with_snow",
+        "path": "/models/gltf/gravel_with_snow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "lava",
+        "path": "/models/gltf/lava.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "metal",
+        "path": "/models/gltf/metal.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "prototype",
+        "path": "/models/gltf/prototype.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "sand_A",
+        "path": "/models/gltf/sand_A.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "sand_B",
+        "path": "/models/gltf/sand_B.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "sand_with_grass",
+        "path": "/models/gltf/sand_with_grass.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "sand_with_snow",
+        "path": "/models/gltf/sand_with_snow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "snow",
+        "path": "/models/gltf/snow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "stone",
+        "path": "/models/gltf/stone.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "stone_dark",
+        "path": "/models/gltf/stone_dark.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "stone_with_copper",
+        "path": "/models/gltf/stone_with_copper.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "stone_with_gold",
+        "path": "/models/gltf/stone_with_gold.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "stone_with_silver",
+        "path": "/models/gltf/stone_with_silver.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "striped_block_blue",
+        "path": "/models/gltf/striped_block_blue.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "striped_block_green",
+        "path": "/models/gltf/striped_block_green.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "striped_block_red",
+        "path": "/models/gltf/striped_block_red.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "striped_block_yellow",
+        "path": "/models/gltf/striped_block_yellow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "tree",
+        "path": "/models/gltf/tree.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "tree_with_snow",
+        "path": "/models/gltf/tree_with_snow.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "water",
+        "path": "/models/gltf/water.gltf",
+        "gridsize": 1,
+        "scale": 1
+    },
+    {
+        "name": "wood",
+        "path": "/models/gltf/wood.gltf",
+        "gridsize": 1,
+        "scale": 1
+    }
+]
