@@ -12,11 +12,10 @@ const sceneCache = new Map();
 
 export default function OtherPlayer({ playerData, sessionId }) {
   const mage = useGLTF("./models/characters/Mage.glb");
+  const cacheKey = sessionId || "missing";
 
-  // Get or create cached cloned scene
+  // Get or create cached cloned scene keyed by sessionId only
   const [clonedScene] = useState(() => {
-    const cacheKey = sessionId || Math.random().toString(36);
-
     if (!sceneCache.has(cacheKey)) {
       sceneCache.set(cacheKey, SkeletonUtils.clone(mage.scene));
     }
@@ -130,10 +129,9 @@ export default function OtherPlayer({ playerData, sessionId }) {
     updateTargets(playerData);
   }, [playerData, updateTargets]);
 
-  // Cleanup cached scene when component unmounts
+  // Cleanup cached scene when component unmounts (use sessionId-only key)
   useEffect(() => {
     return () => {
-      const cacheKey = sessionId || Math.random().toString(36);
       if (sceneCache.has(cacheKey)) {
         const cachedScene = sceneCache.get(cacheKey);
         // Dispose of resources
@@ -150,7 +148,7 @@ export default function OtherPlayer({ playerData, sessionId }) {
         sceneCache.delete(cacheKey);
       }
     };
-  }, [sessionId]);
+  }, [cacheKey]);
 
   // Optimized frame updates with throttling
   useFrame((state, delta) => {
