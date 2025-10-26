@@ -1,10 +1,11 @@
-import { Room, Client } from "@colyseus/core";
+import { Room, Client } from "colyseus";
 import { MyRoomState, Player } from "./schema/MyRoomState";
 
 export class MyRoom extends Room<MyRoomState> {
   maxClients = 8; // Increased since rooms are smaller now
   physicalRoomId: string;
   roomCoords: number[];
+  private pruneTimer: any;
 
   onCreate(options: any) {
     console.log("Room created with options:", options);
@@ -13,16 +14,32 @@ export class MyRoom extends Room<MyRoomState> {
     this.physicalRoomId = options.physicalRoomId || "4_4_4";
     this.roomCoords = options.roomCoords || [4, 4, 4];
 
-    // Set room metadata for debugging/monitoring
+    // Set room metadata for debugging/monitoring (monitor shows metadata)
     this.setMetadata({
       physicalRoomId: this.physicalRoomId,
       roomCoords: this.roomCoords,
+      label: `room-${this.roomCoords[0]}-${this.roomCoords[1]}-${this.roomCoords[2]}`,
     });
 
     console.log(`Created Colyseus room for physical room: ${this.physicalRoomId}`, this.roomCoords);
 
     this.state = new MyRoomState();
     this.state.physicalRoomId = this.physicalRoomId;
+    this.state.roomX = this.roomCoords[0];
+    this.state.roomY = this.roomCoords[1];
+    this.state.roomZ = this.roomCoords[2];
+
+    // Periodically prune any orphan players not present in connected clients
+    this.pruneTimer = setInterval(() => {
+      const liveSessionIds = new Set(this.clients.map(c => c.sessionId));
+      const toDelete: string[] = [];
+      this.state.players.forEach((p: Player, sessId: string) => {
+        if (!liveSessionIds.has(sessId)) {
+          toDelete.push(sessId);
+        }
+      });
+      toDelete.forEach((sessId) => this.state.players.delete(sessId));
+    }, 2000);
 
     this.onMessage("playerUpdate", (client, message) => {
       const player = this.state.players.get(client.sessionId);
@@ -72,8 +89,18 @@ export class MyRoom extends Room<MyRoomState> {
           ) {
             console.log(`Player ${client.sessionId} has moved to different room:`,
               message.roomCoords, 'but is in room for:', expectedRoomCoords);
-            // Optionally disconnect the player so they rejoin the correct room
-            // client.leave(1000, "Room transition required");
+            // Server-authoritative: remove from this room immediately and instruct client to reconnect
+            try {
+              client.send("roomTransitionRequired", {
+                targetRoomCoords: message.roomCoords,
+              });
+            } catch {}
+
+            // Remove player from state right away to avoid lingering ghost in this room
+            this.state.players.delete(client.sessionId);
+
+            // Disconnect so client can join the target room
+            client.leave(4000, "Room transition required");
           }
         }
       }
@@ -99,6 +126,27 @@ export class MyRoom extends Room<MyRoomState> {
     // Create new player
     const player = new Player();
     player.sessionId = client.sessionId;
+    player.playerId = (options && options.playerId) ? String(options.playerId) : client.sessionId;
+
+    // De-duplicate: if a player with same playerId exists, remove or disconnect previous session
+    let previousSessionId: string | null = null;
+    this.state.players.forEach((p: Player, sessId: string) => {
+      if (p && p.playerId === player.playerId) {
+        previousSessionId = sessId;
+      }
+    });
+    if (previousSessionId && previousSessionId !== client.sessionId) {
+      try {
+        // Inform previous client and disconnect
+        const prevClient = this.clients.find(c => c.sessionId === previousSessionId);
+        if (prevClient) {
+          try { prevClient.send("duplicateSession"); } catch {}
+          prevClient.leave(4001, "Duplicate playerId session");
+        }
+      } catch {}
+      // Ensure removal from state
+      this.state.players.delete(previousSessionId);
+    }
 
     // Set initial position based on this room's coordinates
     // You might want to have spawn points for each room
@@ -129,6 +177,16 @@ export class MyRoom extends Room<MyRoomState> {
     // Remove player from state
     this.state.players.delete(client.sessionId);
 
+    // Safety: prune any orphan entries whose sessions aren't connected anymore
+    const liveSessionIds = new Set(this.clients.map(c => c.sessionId));
+    const toDelete: string[] = [];
+    this.state.players.forEach((p: Player, sessId: string) => {
+      if (!liveSessionIds.has(sessId)) {
+        toDelete.push(sessId);
+      }
+    });
+    toDelete.forEach((sessId) => this.state.players.delete(sessId));
+
     // Optional: Clean up room if empty for too long
     if (this.state.players.size === 0) {
       console.log(`Room ${this.physicalRoomId} is now empty`);
@@ -143,6 +201,10 @@ export class MyRoom extends Room<MyRoomState> {
 
   onDispose() {
     console.log(`Physical room ${this.physicalRoomId} disposing...`);
+    if (this.pruneTimer) {
+      clearInterval(this.pruneTimer);
+      this.pruneTimer = undefined;
+    }
   }
 
   // Helper method to get spawn position for this room
