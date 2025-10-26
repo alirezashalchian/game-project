@@ -30,19 +30,35 @@ export const ColyseusProvider = ({ children }) => {
   const updateQueueRef = useRef([]);
   const lastUpdateRef = useRef(0);
   const pendingRoomSwitch = useRef(false);
-  const connectionTimeoutRef = useRef(null);
+  const playerIdRef = useRef(null);
+  const currentRoomRef = useRef(null);
+  const currentPhysicalRoomIdRef = useRef(null);
+  const isConnectedRef = useRef(false);
 
   // Initialize client only once
   useEffect(() => {
     const client = new Client("ws://localhost:2567");
     clientRef.current = client;
 
-    return () => {
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
+    // Initialize stable playerId per TAB (use sessionStorage, not localStorage)
+    try {
+      const key = "playerId";
+      const existing = sessionStorage.getItem(key);
+      if (existing) {
+        playerIdRef.current = existing;
+      } else {
+        const id = `p_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+        sessionStorage.setItem(key, id);
+        playerIdRef.current = id;
       }
-      if (currentRoom) {
-        currentRoom.leave();
+    } catch (e) {
+      console.warn("Failed to init playerId in sessionStorage", e);
+    }
+
+    return () => {
+      const room = currentRoomRef.current;
+      if (room) {
+        try { room.leave(); } catch (e) { console.warn("Error leaving room on unmount", e); }
       }
     };
   }, []);
@@ -68,7 +84,11 @@ export const ColyseusProvider = ({ children }) => {
     }
 
     // If already in this room and connected, don't reconnect
-    if (currentPhysicalRoomId === roomId && currentRoom && isConnected) {
+    if (
+      currentPhysicalRoomIdRef.current === roomId &&
+      currentRoomRef.current &&
+      isConnectedRef.current
+    ) {
       console.log("Already connected to this room, ignoring request");
       return;
     }
@@ -77,51 +97,40 @@ export const ColyseusProvider = ({ children }) => {
       pendingRoomSwitch.current = true;
       setIsConnected(false);
 
-      // Clear any existing connection timeout
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-      }
-
       // Leave current room if exists
-      if (currentRoom) {
-        console.log("Leaving current room:", currentPhysicalRoomId);
+      if (currentRoomRef.current) {
+        console.log("Leaving current room:", currentPhysicalRoomIdRef.current);
         try {
-          await currentRoom.leave();
+          await currentRoomRef.current.leave();
+          // Ensure no lingering handlers on old room
+          try { currentRoomRef.current.removeAllListeners(); } catch (e) {
+            console.warn("Error removing listeners from old room", e);
+          }
         } catch (error) {
           console.warn("Error leaving room:", error);
         }
         setCurrentRoom(null);
+        currentRoomRef.current = null;
         setPlayers(new Map());
         setCurrentSessionId(null);
       }
 
       console.log("Attempting to connect to room:", roomId);
 
-      // Add connection timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        connectionTimeoutRef.current = setTimeout(() => {
-          reject(new Error("Connection timeout"));
-        }, 10000); // 10 second timeout
+      // Single join attempt to avoid background connections creating ghost sessions
+      const room = await clientRef.current.joinOrCreate("dynamic_room", {
+        physicalRoomId: roomId,
+        roomCoords: physicalRoomCoords,
+        playerId: playerIdRef.current,
       });
 
-      // Race between connection and timeout
-      const room = await Promise.race([
-        clientRef.current.joinOrCreate("dynamic_room", {
-          physicalRoomId: roomId,
-          roomCoords: physicalRoomCoords,
-        }),
-        timeoutPromise,
-      ]);
-
-      // Clear timeout on successful connection
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-      }
-
       setCurrentRoom(room);
+      currentRoomRef.current = room;
       setCurrentSessionId(room.sessionId);
       setCurrentPhysicalRoomId(roomId);
+      currentPhysicalRoomIdRef.current = roomId;
       setIsConnected(true);
+      isConnectedRef.current = true;
       pendingRoomSwitch.current = false;
 
       console.log(
@@ -175,6 +184,7 @@ export const ColyseusProvider = ({ children }) => {
       room.onError((code, message) => {
         console.error("Room error:", code, message);
         setIsConnected(false);
+        isConnectedRef.current = false;
         pendingRoomSwitch.current = false;
       });
 
@@ -182,6 +192,7 @@ export const ColyseusProvider = ({ children }) => {
       room.onLeave((code) => {
         console.log("Left room with code:", code);
         setIsConnected(false);
+        isConnectedRef.current = false;
         if (pendingRoomSwitch.current) {
           // Only reset pending if this was expected
           pendingRoomSwitch.current = false;
@@ -192,126 +203,34 @@ export const ColyseusProvider = ({ children }) => {
       room.onMessage("roomInfo", (message) => {
         console.log("Room info received:", message);
       });
+
+      // Server-driven room transition
+      room.onMessage("roomTransitionRequired", (message) => {
+        if (!message || !message.targetRoomCoords) return;
+        console.log(
+          "Server requested room transition to:",
+          message.targetRoomCoords
+        );
+        connectToRoom(message.targetRoomCoords);
+      });
+
+      room.onMessage("duplicateSession", () => {
+        console.warn("Duplicate session detected. Leaving room.");
+        try {
+          room.leave();
+        } catch (e) {
+          console.warn("Error leaving room after duplicateSession", e);
+        }
+      });
     } catch (error) {
       console.error("Failed to connect to room:", roomId, error);
       setIsConnected(false);
+      isConnectedRef.current = false;
       pendingRoomSwitch.current = false;
-
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-      }
     }
   }, []); // Empty dependency array to prevent recreation
 
-  // Initial connection - separate effect with no dependencies on connectToRoom
-  useEffect(() => {
-    let mounted = true;
-
-    const initializeConnection = async () => {
-      if (!clientRef.current) return;
-
-      // Wait a bit for client to be ready
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      if (mounted) {
-        const initialRoomCoords = [4, 4, 4];
-        const roomId = getRoomId(initialRoomCoords);
-
-        try {
-          pendingRoomSwitch.current = true;
-          const room = await clientRef.current.joinOrCreate("dynamic_room", {
-            physicalRoomId: roomId,
-            roomCoords: initialRoomCoords,
-          });
-
-          if (mounted) {
-            setCurrentRoom(room);
-            setCurrentSessionId(room.sessionId);
-            setCurrentPhysicalRoomId(roomId);
-            setIsConnected(true);
-            pendingRoomSwitch.current = false;
-
-            console.log(
-              "Initial connection successful:",
-              room.sessionId,
-              "Physical room:",
-              roomId
-            );
-
-            // Set up event handlers
-            room.onStateChange((state) => {
-              if (!mounted) return;
-
-              if (state && state.players) {
-                const currentPlayers = new Map();
-                for (const [sessionId, player] of state.players) {
-                  if (player) {
-                    currentPlayers.set(sessionId, {
-                      sessionId: player.sessionId || sessionId,
-                      position: {
-                        x: player.x || 0,
-                        y: player.y || 0,
-                        z: player.z || 0,
-                      },
-                      quaternion: {
-                        x: player.qx || 0,
-                        y: player.qy || 0,
-                        z: player.qz || 0,
-                        w: player.qw || 1,
-                      },
-                      gravity: [
-                        player.gravityX || 0,
-                        player.gravityY || -9.8,
-                        player.gravityZ || 0,
-                      ],
-                      floorSurface: player.floorSurface || "bottom",
-                      animation: player.currentAnimation || "Idle",
-                      roomCoords: [
-                        player.roomX || 4,
-                        player.roomY || 4,
-                        player.roomZ || 4,
-                      ],
-                    });
-                  }
-                }
-                setPlayers(currentPlayers);
-              }
-            });
-
-            room.onError((code, message) => {
-              console.error("Room error:", code, message);
-              if (mounted) {
-                setIsConnected(false);
-                pendingRoomSwitch.current = false;
-              }
-            });
-
-            room.onLeave((code) => {
-              console.log("Left room with code:", code);
-              if (mounted) {
-                setIsConnected(false);
-              }
-            });
-
-            room.onMessage("roomInfo", (message) => {
-              console.log("Room info received:", message);
-            });
-          }
-        } catch (error) {
-          console.error("Initial connection failed:", error);
-          if (mounted) {
-            pendingRoomSwitch.current = false;
-          }
-        }
-      }
-    };
-
-    initializeConnection();
-
-    return () => {
-      mounted = false;
-    };
-  }, []); // Only run once on mount
+  // Initial connection is handled by RoomContext via handleRoomTransition
 
   // Throttled update sender (30fps max)
   useEffect(() => {
@@ -350,7 +269,7 @@ export const ColyseusProvider = ({ children }) => {
   const handleRoomTransition = useCallback(
     (newRoomCoords) => {
       const newRoomId = getRoomId(newRoomCoords);
-      const currentRoomId = currentPhysicalRoomId;
+      const currentRoomId = currentPhysicalRoomIdRef.current;
 
       console.log("handleRoomTransition called:", {
         newRoomCoords,
@@ -369,7 +288,7 @@ export const ColyseusProvider = ({ children }) => {
         connectToRoom(newRoomCoords);
       }
     },
-    [connectToRoom, currentPhysicalRoomId]
+    [connectToRoom]
   );
 
   const value = {
