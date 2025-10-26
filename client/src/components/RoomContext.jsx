@@ -13,6 +13,7 @@ import {
 } from "../utils/roomUtils";
 import { useRoomData } from "../hooks/useRoomData";
 import { modelCatalog } from "../models";
+import { useColyseus } from "@/context/ColyseusContext";
 
 const RoomContext = createContext(null);
 
@@ -31,6 +32,7 @@ export function RoomProvider({ children }) {
   const roomRefs = useRef([]);
   // Track last position to avoid unnecessary updates
   const lastPositionRef = useRef(null);
+  const { handleRoomTransition } = useColyseus();
 
   // Convex integration
   const {
@@ -126,6 +128,13 @@ export function RoomProvider({ children }) {
       }
     }
   }, [currentRoom]);
+
+  // Notify Colyseus when the physical room changes so we can re/connect to the correct server room
+  useEffect(() => {
+    if (!currentRoom) return;
+    const coords = getCoordsFromRoomId(currentRoom.id);
+    handleRoomTransition(coords);
+  }, [currentRoom, handleRoomTransition]);
 
   // Update current room based on character position
   const updateCurrentRoom = useCallback(
