@@ -7,6 +7,8 @@ import { CharacterProvider } from "./CharacterContext";
 import { SaveSystem } from "./SaveSystem";
 import { ModelSelectorUI } from "./ModelSelectorUI";
 import { GravityChangeUI } from "./GravityChangeUI";
+import VoiceToggle from "./VoiceToggle";
+import RemoteAudio from "./RemoteAudio";
 import RoomWithPhysics from "./Rooms";
 import GameLoadingPage from "./LoadingPage";
 import { useGameLoading } from "../hooks/useGameLoading";
@@ -83,6 +85,8 @@ export default function GamePage() {
           </Canvas>
           <SaveSystem />
           <GravityChangeUI />
+          <VoiceToggle />
+          <RemoteAudio />
         </KeyboardControls>
       </CharacterProvider>
     </RoomProvider>

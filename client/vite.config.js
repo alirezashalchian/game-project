@@ -12,4 +12,13 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      // Proxy API calls to the Colyseus/Express server (default port 2567)
+      "/api": {
+        target: "http://localhost:2567",
+        changeOrigin: true,
+      },
+    },
+  },
 })

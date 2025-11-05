@@ -9,6 +9,10 @@
  * See: https://docs.colyseus.io/server/api/#constructor-options
  */
 import { listen } from "@colyseus/tools";
+import * as dotenv from "dotenv";
+
+// Load environment variables (.env.production or .env.development)
+dotenv.config({ path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.development" });
 
 // Import Colyseus config
 import app from "./app.config";

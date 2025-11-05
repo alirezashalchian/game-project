@@ -1,11 +1,13 @@
 import config from "@colyseus/tools";
 import { monitor } from "@colyseus/monitor";
+import express from "express";
 import { playground } from "@colyseus/playground";
 
 /**
  * Import your Room files
  */
 import { MyRoom } from "./rooms/MyRoom";
+import huddleRoutes from "./huddleRoutes";
 
 export default config({
   initializeGameServer: (gameServer) => {
@@ -19,6 +21,9 @@ export default config({
   },
 
   initializeExpress: (app) => {
+    // Parse JSON bodies for API endpoints
+    app.use(express.json());
+
     /**
      * Bind your custom express routes here:
      * Read more: https://expressjs.com/en/starter/basic-routing.html
@@ -41,6 +46,9 @@ export default config({
      * Read more: https://docs.colyseus.io/tools/monitor/#restrict-access-to-the-panel-using-a-password
      */
     app.use("/monitor", monitor());
+
+    // Huddle01 token endpoint
+    app.use(huddleRoutes);
   },
 
   beforeListen: () => {
