@@ -87,11 +87,11 @@ export default function HuddleAudioProvider({ children }) {
           setJoinedRoomId(null);
           setMicEnabled(false);
         }
-        console.log("[Huddle][client] requesting token for", huddleRoomId, "role: listener");
-        const { token, roomId } = await fetchJoinToken(huddleRoomId, "listener");
+        console.log("[Huddle][client] requesting token for", huddleRoomId, "role: speaker (default)");
+        const { token, roomId } = await fetchJoinToken(huddleRoomId, "speaker");
         if (cancelled) return;
 
-        console.log("[Huddle][client] joining room (listener)", { roomId, tokenLen: token?.length });
+        console.log("[Huddle][client] joining room (speaker default)", { roomId, tokenLen: token?.length });
         await joinRoom({ roomId, token });
         if (cancelled) return;
         // wait until fully joined so peers can discover us
@@ -102,7 +102,7 @@ export default function HuddleAudioProvider({ children }) {
         pendingRef.current = false;
       } catch (e) {
         if (!cancelled) {
-          console.warn("[Huddle][client] listener join error", e);
+          console.warn("[Huddle][client] speaker(default) join error", e);
           setError(e?.message || String(e));
         }
         pendingRef.current = false;
@@ -113,16 +113,7 @@ export default function HuddleAudioProvider({ children }) {
 
   const startMic = useCallback(async () => {
     try {
-      if (!huddleRoomId) return;
-      // fetch speaker token and re-join with produce permissions
-      const { token, roomId } = await fetchJoinToken(huddleRoomId, "speaker");
-      try { await leaveRoom(); } catch { /* noop */ }
-      console.log("[Huddle][client] re-joining room (speaker)", { roomId, tokenLen: token?.length });
-      await joinRoom({ roomId, token });
-      // wait until fully joined as speaker before enabling mic
-      for (let i = 0; i < 50 && !joinedRef.current; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
+      // Already joined as speaker by default; only enable local mic
       if (!isAudioOn) {
         console.log("[Huddle][client] enabling audio (mic) ...");
         await enableAudio();
@@ -133,7 +124,7 @@ export default function HuddleAudioProvider({ children }) {
       console.warn("[Huddle][client] startMic error", e);
       setError(e?.message || String(e));
     }
-  }, [huddleRoomId, fetchJoinToken, leaveRoom, joinRoom, enableAudio, isAudioOn]);
+  }, [enableAudio, isAudioOn]);
 
   const stopMic = useCallback(async () => {
     try {
@@ -149,11 +140,21 @@ export default function HuddleAudioProvider({ children }) {
   }, [disableAudio, micEnabled, isAudioOn]);
 
   useEffect(() => {
-    // log basic state transitions for diagnosis
-    if (roomState?.joined) {
-      console.log("[Huddle][client] joined room state");
+    // log room state keys and basic peer-related info if present
+    if (!roomState) return;
+    try {
+      const keys = Object.keys(roomState || {});
+      const peers = roomState?.peers;
+      const peerCount = peers ? Object.keys(peers).length : undefined;
+      console.log("[Huddle][client] roomState update", {
+        joined: roomState?.joined,
+        keys,
+        peerCount,
+      });
+    } catch (e) {
+      console.log("[Huddle][client] roomState update (log error)", e);
     }
-  }, [roomState?.joined]);
+  }, [roomState]);
 
   const value = { joinedRoomId, micEnabled, startMic, stopMic, error };
   return <HuddleAudioContext.Provider value={value}>{children}</HuddleAudioContext.Provider>;

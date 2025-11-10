@@ -71,13 +71,8 @@ export function RoomProvider({ children }) {
         return baseModel;
       });
 
-      console.log(
-        `Loaded ${convertedModels.length} blocks for room ${currentRoom.id}`
-      );
       setPlacedModels(convertedModels);
     } else if (roomData === null || roomData === undefined) {
-      // Room doesn't exist in Convex yet - start with empty room
-      console.log(`Room ${currentRoom.id} is new - starting with empty room`);
       setPlacedModels([]);
     }
   }, [roomData, currentRoom, convertConvexToModelFormat]);
@@ -276,7 +271,6 @@ export function RoomProvider({ children }) {
 
       // Clear from Convex asynchronously
       await clearRoomInConvex();
-      console.log("Room cleared successfully");
     } catch (error) {
       console.error("Failed to clear room in Convex:", error);
     }

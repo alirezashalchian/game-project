@@ -5,6 +5,8 @@ const router = Router();
 
 const HUDDLE_API_KEY = process.env.HUDDLE_API_KEY;
 
+const speaker = Role.SPEAKER
+
 // In-memory mapping from our alias (e.g., "h-room-4-4-4") to real Huddle roomId
 const roomAliasToId = new Map<string, string>();
 // Prevent duplicate creations under race
@@ -29,7 +31,6 @@ async function getOrCreateHuddleRoomId(alias: string): Promise<string> {
         "x-api-key": String(HUDDLE_API_KEY),
       } as Record<string, string>;
 
-      console.log("[Huddle] creating room via REST for alias:", alias);
       const resp = await doFetch(url, { method: "POST", headers, body });
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok) {
@@ -43,7 +44,6 @@ async function getOrCreateHuddleRoomId(alias: string): Promise<string> {
         throw new Error("create-room: missing roomId in response");
       }
       roomAliasToId.set(alias, roomId);
-      console.log("[Huddle] room created:", alias, "=>", roomId);
       return roomId;
     } finally {
       roomAliasPending.delete(alias);
@@ -57,11 +57,6 @@ async function getOrCreateHuddleRoomId(alias: string): Promise<string> {
 router.post("/api/huddle/token", async (req, res) => {
   try {
     const { huddleRoomId, role } = req.body || {};
-    console.log("[Huddle] token request", {
-      huddleRoomId,
-      role,
-      hasKey: !!HUDDLE_API_KEY,
-    });
 
     if (!huddleRoomId || typeof huddleRoomId !== "string") {
       console.error("[Huddle] invalid room id input");
@@ -82,32 +77,29 @@ router.post("/api/huddle/token", async (req, res) => {
     // Resolve real Huddle roomId (create room if needed) from our alias
     const realRoomId = await getOrCreateHuddleRoomId(huddleRoomId);
 
-    // Map our role to Huddle Role and permissions
-    const isSpeaker = role === "speaker";
     const accessToken = new AccessToken({
       apiKey: HUDDLE_API_KEY as string,
       roomId: realRoomId,
-      role: isSpeaker ? Role.HOST : Role.GUEST,
+    role: speaker,
       permissions: {
-        admin: isSpeaker,               // host can be admin; guest not required
+        admin: true,               // host can be admin; guest not required
         canConsume: true,
-        canProduce: isSpeaker,          // only speaker publishes
-        canProduceSources: { cam: false, mic: isSpeaker, screen: false },
+        canProduce: true,          // only speaker publishes
+        canProduceSources: { cam: false, mic: true, screen: false },
         canRecvData: true,
         canSendData: true,              // allow data channel so peers can discover each other
         canUpdateMetadata: true,        // allow SDK to sync metadata
       },
-      options: { metadata: {} },
+    options: { metadata: { appRole: "speaker" }  },
     });
-    const tokenStr = await accessToken.toJwt();
+    const token = await accessToken.toJwt();
 
-    if (!tokenStr || typeof tokenStr !== "string" || tokenStr.length < 10) {
+    if (!token || typeof token !== "string" || token.length < 10) {
       console.error("[Huddle] token mint returned empty/invalid");
       return res.status(500).json({ error: "failed to mint token" });
     }
 
-    console.log("[Huddle] token minted:", tokenStr.slice(0, 16) + "...", "len:", tokenStr.length);
-    return res.json({ token: tokenStr, roomId: realRoomId });
+    return res.json({ token: token, roomId: realRoomId });
   } catch (err: any) {
     console.error("[Huddle] token mint error:", err?.message || err);
     return res.status(500).json({ error: err?.message || "token error" });
