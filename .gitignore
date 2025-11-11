@@ -1,0 +1,6 @@
+.env
+.env.*
+client/.env
+client/.env.*
+server/.env
+server/.env.*
