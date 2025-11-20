@@ -19,11 +19,9 @@ export default function HuddleAudioProvider({ children }) {
   const joinedRef = useRef(false);
   const { joinRoom, leaveRoom, state: roomState } = useRoom({
     onJoin: () => {
-      console.log("[Huddle][client] onJoin fired");
       joinedRef.current = true;
     },
     onLeave: () => {
-      console.log("[Huddle][client] onLeave fired");
       joinedRef.current = false;
     },
   });
@@ -45,14 +43,12 @@ export default function HuddleAudioProvider({ children }) {
   }, [currentPhysicalRoomId]);
 
   const fetchJoinToken = useCallback(async (roomId, role) => {
-    console.log("[Huddle][client] fetchJoinToken", { roomId, role });
     const res = await fetch("/api/huddle/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ huddleRoomId: roomId, role }),
     });
     const data = await res.json();
-    console.log("[Huddle][client] token response status", res.status, "keys:", Object.keys(data || {}));
     if (!res.ok) throw new Error(data.error || "token error");
     return { token: data.token, roomId: data.roomId || roomId };
   }, []);
@@ -60,18 +56,7 @@ export default function HuddleAudioProvider({ children }) {
 
   // Log local capture state
   useEffect(() => {
-    if (localStream) {
-      console.log("[Huddle][client] localStream tracks", {
-        audio: localStream.getAudioTracks().length,
-        video: localStream.getVideoTracks().length,
-        isAudioOn,
-      });
-    } else {
-      console.log("[Huddle][client] localStream is null", { isAudioOn });
-    }
-    if (localTrack) {
-      console.log("[Huddle][client] localTrack ready", { enabled: localTrack.enabled, kind: localTrack.kind });
-    }
+    // Removed console logs for localStream and localTrack
   }, [localStream, localTrack, isAudioOn]);
 
   // Join/leave on physical room changes
@@ -87,11 +72,9 @@ export default function HuddleAudioProvider({ children }) {
           setJoinedRoomId(null);
           setMicEnabled(false);
         }
-        console.log("[Huddle][client] requesting token for", huddleRoomId, "role: speaker (default)");
         const { token, roomId } = await fetchJoinToken(huddleRoomId, "speaker");
         if (cancelled) return;
 
-        console.log("[Huddle][client] joining room (speaker default)", { roomId, tokenLen: token?.length });
         await joinRoom({ roomId, token });
         if (cancelled) return;
         // wait until fully joined so peers can discover us
@@ -115,10 +98,8 @@ export default function HuddleAudioProvider({ children }) {
     try {
       // Already joined as speaker by default; only enable local mic
       if (!isAudioOn) {
-        console.log("[Huddle][client] enabling audio (mic) ...");
         await enableAudio();
       }
-      console.log("[Huddle][client] mic enabled?", true);
       setMicEnabled(true);
     } catch (e) {
       console.warn("[Huddle][client] startMic error", e);
@@ -130,30 +111,16 @@ export default function HuddleAudioProvider({ children }) {
     try {
       if (!micEnabled) return;
       if (isAudioOn) {
-        console.log("[Huddle][client] disabling audio (mic) ...");
         await disableAudio();
       } else {
-        console.log("[Huddle][client] disableAudio skipped (isAudioOn=false)");
+        // skipped
       }
       setMicEnabled(false);
     } catch (e) { setError(e?.message || String(e)); }
   }, [disableAudio, micEnabled, isAudioOn]);
 
   useEffect(() => {
-    // log room state keys and basic peer-related info if present
-    if (!roomState) return;
-    try {
-      const keys = Object.keys(roomState || {});
-      const peers = roomState?.peers;
-      const peerCount = peers ? Object.keys(peers).length : undefined;
-      console.log("[Huddle][client] roomState update", {
-        joined: roomState?.joined,
-        keys,
-        peerCount,
-      });
-    } catch (e) {
-      console.log("[Huddle][client] roomState update (log error)", e);
-    }
+    // Removed console logs for roomState update
   }, [roomState]);
 
   const value = { joinedRoomId, micEnabled, startMic, stopMic, error };
