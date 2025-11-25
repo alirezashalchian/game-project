@@ -45,6 +45,29 @@ export const shouldWallHaveDoor = (roomId, wallType) => {
   return !isPhantomRoom(adjacentCoords);
 };
 
+/**
+ * Helper to get the ID of the adjacent room in a specific direction
+ */
+export const getAdjacentRoomId = (roomId, wallType) => {
+  const coords = getCoordsFromRoomId(roomId);
+  const [x, y, z] = coords;
+  
+  let adjacentCoords;
+  switch (wallType) {
+    case "front": adjacentCoords = [x, y, z + 1]; break;
+    case "back": adjacentCoords = [x, y, z - 1]; break;
+    case "right": adjacentCoords = [x + 1, y, z]; break;
+    case "left": adjacentCoords = [x - 1, y, z]; break;
+    case "top": adjacentCoords = [x, y + 1, z]; break;
+    case "bottom": adjacentCoords = [x, y - 1, z]; break;
+    default: return null;
+  }
+
+  if (isPhantomRoom(adjacentCoords)) return null;
+
+  return `room-${adjacentCoords[0]}-${adjacentCoords[1]}-${adjacentCoords[2]}`;
+};
+
 // Function to generate wall configurations for a room
 export const generateWallConfigs = (roomId) => {
   const halfInnerSize = roomConfig.innerSize / 2;

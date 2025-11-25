@@ -25,6 +25,9 @@ export const ColyseusProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [currentPhysicalRoomId, setCurrentPhysicalRoomId] = useState(null);
+  
+  // Stores the player count of adjacent rooms: { "room-5-4-4": 8, ... }
+  const [roomCounts, setRoomCounts] = useState({});
 
   const clientRef = useRef(null);
   const updateQueueRef = useRef([]);
@@ -106,6 +109,8 @@ export const ColyseusProvider = ({ children }) => {
         currentRoomRef.current = null;
         setPlayers(new Map());
         setCurrentSessionId(null);
+        // Reset counts on room switch (optional, but cleaner)
+        setRoomCounts({});
       }
 
       // Single join attempt to avoid background connections creating ghost sessions
@@ -185,9 +190,26 @@ export const ColyseusProvider = ({ children }) => {
         }
       });
 
-      // Handle room info message
+      // Handle room info message (Current Room Count)
       room.onMessage("roomInfo", (message) => {
-        console.log("Room info received:", message);
+        // message: { physicalRoomId: "...", playerCount: 5, ... }
+        if (message.physicalRoomId && message.playerCount !== undefined) {
+          setRoomCounts(prev => ({
+            ...prev,
+            [message.physicalRoomId]: message.playerCount
+          }));
+        }
+      });
+
+      // Handle neighbor updates (Adjacent Room Counts)
+      room.onMessage("neighborCountUpdate", (message) => {
+        // message: { roomId: "...", count: 5 }
+        if (message.roomId && message.count !== undefined) {
+          setRoomCounts(prev => ({
+            ...prev,
+            [message.roomId]: message.count
+          }));
+        }
       });
 
       // Server-driven room transition
@@ -265,6 +287,7 @@ export const ColyseusProvider = ({ children }) => {
     isConnected,
     currentSessionId,
     currentPhysicalRoomId,
+    roomCounts, // Export roomCounts so components can access it
     sendPlayerUpdate,
     handleRoomTransition,
     connectToRoom,

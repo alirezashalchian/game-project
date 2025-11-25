@@ -1,9 +1,9 @@
 import React from "react";
-import { RigidBody } from "@react-three/rapier";
+import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import { roomConfig } from "../Room/roomConfig";
 import { WallPiece } from "./WallPiece";
 
-export const Wall = ({ position, rotation, type, hasDoor = true, roomId }) => {
+export const Wall = ({ position, rotation, type, hasDoor = true, roomId, isBlocked = false }) => {
   const halfInnerSize = roomConfig.innerSize / 2;
   const sidePieceWidth = (roomConfig.innerSize - roomConfig.doorSize) / 2;
 
@@ -59,6 +59,39 @@ export const Wall = ({ position, rotation, type, hasDoor = true, roomId }) => {
               ]}
               type={type}
             />
+
+             {/* THE SOLID BLOCKER: Only rendered if isBlocked is true */}
+             {isBlocked && (
+              <>
+                 {/* 1. SOLID COLLIDER to physically block players */}
+                 {/* Note: sensor={false} makes it solid */}
+                 <CuboidCollider
+                   args={[
+                     roomConfig.doorSize / 2, 
+                     roomConfig.doorSize / 2, 
+                     roomConfig.wallThickness / 2
+                   ]}
+                   position={[0, 0, 0]}
+                   sensor={false} 
+                 />
+                 
+                 {/* 2. Visual Feedback (Red Force Field) */}
+                 <mesh position={[0, 0, 0]}>
+                   <boxGeometry args={[
+                     roomConfig.doorSize, 
+                     roomConfig.doorSize, 
+                     roomConfig.wallThickness
+                   ]} />
+                   <meshStandardMaterial 
+                     color="#ff0000" 
+                     opacity={0.5} 
+                     transparent={true}
+                     emissive="#ff0000" 
+                     emissiveIntensity={0.2} 
+                   />
+                 </mesh>
+              </>
+            )}
           </>
         ) : (
           // Solid wall (no door) - for phantom-adjacent walls

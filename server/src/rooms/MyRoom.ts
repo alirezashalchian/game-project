@@ -2,7 +2,7 @@ import { Room, Client } from "colyseus";
 import { MyRoomState, Player } from "./schema/MyRoomState";
 
 export class MyRoom extends Room<MyRoomState> {
-  maxClients = 8; // Increased since rooms are smaller now
+  maxClients = 2; // Increased since rooms are smaller now
   physicalRoomId: string;
   roomCoords: number[];
   private pruneTimer: any;
@@ -28,6 +28,15 @@ export class MyRoom extends Room<MyRoomState> {
     this.state.roomX = this.roomCoords[0];
     this.state.roomY = this.roomCoords[1];
     this.state.roomZ = this.roomCoords[2];
+
+    // Subscribe to adjacent room counts using Colyseus Presence
+    this.subscribeToNeighbors();
+
+    // Heartbeat: Periodically publish room count to ensure neighbors have current state
+    // This fixes the "missed message" issue for neighbors that start up later
+    this.clock.setInterval(() => {
+      this.updateRoomCount();
+    }, 1000);
 
     // Periodically prune any orphan players not present in connected clients
     this.pruneTimer = setInterval(() => {
@@ -120,6 +129,44 @@ export class MyRoom extends Room<MyRoomState> {
     });
   }
 
+  // Helper to get neighbor room IDs
+  getNeighborIds() {
+    const [x, y, z] = this.roomCoords;
+    return [
+      `room-${x+1}-${y}-${z}`, `room-${x-1}-${y}-${z}`,
+      `room-${x}-${y+1}-${z}`, `room-${x}-${y-1}-${z}`,
+      `room-${x}-${y}-${z+1}`, `room-${x}-${y}-${z-1}`
+    ];
+  }
+
+  async subscribeToNeighbors() {
+    const neighbors = this.getNeighborIds();
+    
+    for (const neighborId of neighbors) {
+      // Subscribe to count updates from this neighbor
+      // Format: "room-count:room-x-y-z"
+      this.presence.subscribe(`room-count:${neighborId}`, (count: string) => {
+        // Notify all clients in this room about the neighbor's new count
+        this.broadcast("neighborCountUpdate", {
+          roomId: neighborId,
+          count: parseInt(count)
+        });
+      });
+    }
+  }
+
+  updateRoomCount() {
+    // Publish this room's new count to the shared presence channel
+    this.presence.publish(`room-count:${this.physicalRoomId}`, this.clients.length.toString());
+    
+    // Also notify clients inside this room (so they know their own room count)
+    this.broadcast("roomInfo", {
+      physicalRoomId: this.physicalRoomId,
+      roomCoords: this.roomCoords,
+      playerCount: this.clients.length
+    });
+  }
+
   onJoin(client: Client, options: any) {
     console.log(`${client.sessionId} joined physical room: ${this.physicalRoomId}`);
 
@@ -163,12 +210,8 @@ export class MyRoom extends Room<MyRoomState> {
     // Add player to state
     this.state.players.set(client.sessionId, player);
 
-    // Optional: Send room-specific data to the joining player
-    client.send("roomInfo", {
-      physicalRoomId: this.physicalRoomId,
-      roomCoords: this.roomCoords,
-      playerCount: this.state.players.size
-    });
+    // UPDATE COUNT
+    this.updateRoomCount();
   }
 
   onLeave(client: Client, consented: boolean) {
@@ -186,6 +229,9 @@ export class MyRoom extends Room<MyRoomState> {
       }
     });
     toDelete.forEach((sessId) => this.state.players.delete(sessId));
+
+    // UPDATE COUNT
+    this.updateRoomCount();
 
     // Optional: Clean up room if empty for too long
     if (this.state.players.size === 0) {
@@ -205,6 +251,7 @@ export class MyRoom extends Room<MyRoomState> {
       clearInterval(this.pruneTimer);
       this.pruneTimer = undefined;
     }
+    // Clear presence subscription? (Automatic in Colyseus usually)
   }
 
   // Helper method to get spawn position for this room
