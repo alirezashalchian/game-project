@@ -15,6 +15,7 @@ import {
   getFloorSurfaceFromGravity,
   calculateTargetQuaternion,
 } from "../utils/surfaceUtils";
+import { useCharacterPhysics } from "../hooks/useCharacterPhysics";
 
 export default function Mage() {
   const mage = useGLTF("./models/characters/Barbarian.glb");
@@ -103,6 +104,20 @@ export default function Mage() {
     pausedCameraTarget: new THREE.Vector3(),
     pausedCameraUp: new THREE.Vector3(),
   });
+
+  // Add the physics hook
+  const { updatePhysics } = useCharacterPhysics(
+    rigidBodyRef,
+    characterState,
+    fallingStateRef,
+    {
+      moveSpeed: 5,
+      gravityStrength: 1.25,
+      rotationSpeed: 3,
+      acceleration: 25,
+      deceleration: 8,
+    }
+  );
 
   // Helper function to check if we should send an update
   const shouldSendUpdate = (currentData) => {
@@ -477,112 +492,12 @@ export default function Mage() {
       );
     }
 
-    // Handle horizontal rotation (quaternion-based)
-    if (!characterState.current.isTransitioning) {
-      let rotationChange = 0;
-      if (leftward)
-        rotationChange = characterState.current.rotationSpeed * delta;
-
-      if (rightward)
-        rotationChange = -characterState.current.rotationSpeed * delta;
-
-      if (rotationChange !== 0) {
-        characterState.current.horizontalRotation += rotationChange;
-
-        const { up } = getSurfaceVectors(
-          currentFloorSurface,
-          characterState.current.horizontalRotation
-        );
-
-        characterState.current.currentHorizontalQuaternion.setFromAxisAngle(
-          up,
-          characterState.current.horizontalRotation
-        );
-      }
-    }
-
-    // Calculate final combined quaternion (surface orientation + horizontal rotation)
-    const finalQuaternion =
-      characterState.current.currentSurfaceQuaternion.clone();
-    finalQuaternion.premultiply(
-      characterState.current.currentHorizontalQuaternion
-    );
-
-    // Apply to physics body
-    rigidBodyRef.current.setRotation({
-      x: finalQuaternion.x,
-      y: finalQuaternion.y,
-      z: finalQuaternion.z,
-      w: finalQuaternion.w,
-    });
-
-    // Movement calculations (only when not transitioning)
-    if (!characterState.current.isTransitioning) {
-      const { forward: surfaceForward } = getSurfaceVectors(
-        currentFloorSurface,
-        characterState.current.horizontalRotation
-      );
-
-      const currentVel = rigidBodyRef.current.linvel();
-      const moveDirection = new THREE.Vector3(0, 0, 0);
-
-      if (forward) {
-        moveDirection.add(surfaceForward);
-      }
-      if (backward) {
-        moveDirection.sub(surfaceForward);
-      }
-
-      // Air control scaling
-      const airSpeedFactor = fallingStateRef.current.isFalling ? 0.6 : 1.0;
-      const airAccelFactor = fallingStateRef.current.isFalling ? 0.6 : 1.0;
-
-      const targetVelocity = new THREE.Vector3();
-      if (moveDirection.length() > 0) {
-        moveDirection.normalize();
-        moveDirection.multiplyScalar(
-          characterState.current.moveSpeed * airSpeedFactor
-        );
-        targetVelocity.copy(moveDirection);
-      }
-
-      const currentVelocity = new THREE.Vector3(
-        currentVel.x,
-        currentVel.y,
-        currentVel.z
-      );
-      // Remove velocity component along gravity so WASD doesn't counteract falling
-      const horizontalCurrent = currentVelocity
-        .clone()
-        .addScaledVector(
-          gravityDirection,
-          -currentVelocity.dot(gravityDirection)
-        );
-
-      const velocityDiff = new THREE.Vector3();
-      velocityDiff.subVectors(targetVelocity, horizontalCurrent);
-
-      const accelerationRate =
-        moveDirection.length() > 0
-          ? characterState.current.acceleration
-          : characterState.current.deceleration;
-
-      velocityDiff.multiplyScalar(accelerationRate * airAccelFactor * delta);
-      rigidBodyRef.current.applyImpulse(
-        { x: velocityDiff.x, y: velocityDiff.y, z: velocityDiff.z },
-        true
-      );
-    }
-
-    // Apply gravity force each frame
-    const gravityStrength = 1.25 ;
-    rigidBodyRef.current.applyImpulse(
-      {
-        x: currentGravity[0] * delta * gravityStrength,
-        y: currentGravity[1] * delta * gravityStrength,
-        z: currentGravity[2] * delta * gravityStrength,
-      },
-      true
+    // Update physics using the abstraction hook
+    const finalQuaternion = updatePhysics(
+      delta,
+      { forward, backward, leftward, rightward },
+      currentFloorSurface,
+      currentGravity
     );
 
     // Calculate surface-relative camera positioning
