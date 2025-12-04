@@ -5,12 +5,12 @@ export const roomConfig = {
   wallThickness: 0.5, // Thickness of the walls
   doorSize: 3, // Size of the door opening in each wall (reduced to half)
   wallColors: {
-    front: "#FFB366", // Blue-gray
-    back: "#FFB366",
-    right: "#FFB366",
-    left: "#FFB366",
-    top: "#FFB366", // Lighter blue-gray for ceiling
-    bottom: "#FFB366", // Darker blue-gray for floor
+    front: "#1a4a5a",  // Teal (cyan-family) - brighter
+    back: "#1a4a5a",   // Teal (matches front)
+    right: "#1e3a5f",  // Indigo (purple-family) - brighter
+    left: "#1e3a5f",   // Indigo (matches right)
+    top: "#2a2a4a",    // Purple (ceiling) - brighter
+    bottom: "#2a2a4a", // Dark blue (floor - still darkest for orientation)
   },
   cellSize: 0.5, // Size of each grid cell for placement (renamed from gridCellSize)
 };
