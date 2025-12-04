@@ -1,6 +1,11 @@
+# Environment files
 .env
 .env.*
 client/.env
 client/.env.*
 server/.env
 server/.env.*
+
+# macOS system files
+.DS_Store
+**/.DS_Store
