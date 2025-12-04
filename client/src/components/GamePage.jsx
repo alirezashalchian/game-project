@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { KeyboardControls } from "@react-three/drei";
@@ -11,6 +11,8 @@ import VoiceToggle from "./VoiceToggle";
 import RemoteAudio from "./RemoteAudio";
 import RoomWithPhysics from "./Rooms";
 import GameLoadingPage from "./LoadingPage";
+import GuestTutorial from "./GuestTutorial";
+import CharacterShopOverlay from "./CharacterShopOverlay";
 import { useGameLoading } from "../hooks/useGameLoading";
 
 export default function GamePage() {
@@ -22,6 +24,18 @@ export default function GamePage() {
     hasErrors,
     // roomData removed - not needed
   } = useGameLoading();
+
+  // TODO: Replace with actual auth check
+  const [isGuest] = useState(true);
+  const [showCharacterShop, setShowCharacterShop] = useState(false);
+
+  const handleGetCharacter = () => {
+    setShowCharacterShop(true);
+  };
+
+  const handleCloseCharacterShop = () => {
+    setShowCharacterShop(false);
+  };
 
   useEffect(() => {
     if (!isLoading) {
@@ -87,6 +101,11 @@ export default function GamePage() {
           <GravityChangeUI />
           <VoiceToggle />
           <RemoteAudio />
+          {isGuest && <GuestTutorial onGetCharacter={handleGetCharacter} />}
+          <CharacterShopOverlay 
+            isOpen={showCharacterShop} 
+            onClose={handleCloseCharacterShop} 
+          />
         </KeyboardControls>
       </CharacterProvider>
     </RoomProvider>

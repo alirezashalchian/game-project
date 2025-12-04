@@ -11,6 +11,9 @@ export function CharacterProvider({ children }) {
   const [barbarianGravity, setBarbarianGravity] = useState([0, -9.8, 0]);
   const [barbarianFloorSurface, setBarbarianFloorSurface] = useState("bottom");
 
+  // Controls disabled state (for overlays like character shop)
+  const [controlsDisabled, setControlsDisabled] = useState(false);
+
   const value = {
     // Mage state
     mageGravity,
@@ -23,6 +26,10 @@ export function CharacterProvider({ children }) {
     barbarianFloorSurface,
     setBarbarianGravity,
     setBarbarianFloorSurface,
+
+    // Controls state
+    controlsDisabled,
+    setControlsDisabled,
 
     // Legacy support (for backward compatibility if needed)
     currentGravity: mageGravity,

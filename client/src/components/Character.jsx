@@ -27,6 +27,7 @@ export default function Mage() {
     setMageGravity: setCurrentGravity,
     mageFloorSurface: currentFloorSurface,
     setMageFloorSurface: setCurrentFloorSurface,
+    controlsDisabled,
   } = useCharacter();
 
   const rigidBodyRef = useRef();
@@ -223,7 +224,8 @@ export default function Mage() {
     const unsubscribeJump = subscribeKeys(
       (state) => state.mageJump,
       (pressed) => {
-        if (pressed && rigidBodyRef.current) {
+        // Don't allow jump when controls are disabled
+        if (pressed && rigidBodyRef.current && !controlsDisabled) {
           rigidBodyRef.current.applyImpulse(
             { x: 0, y: characterState.current.jumpForce, z: 0 },
             true
@@ -237,14 +239,15 @@ export default function Mage() {
         unsubscribeJump();
       }
     };
-  }, [subscribeKeys]);
+  }, [subscribeKeys, controlsDisabled]);
 
   // Subscribe to gravity change key (G) - UPDATED to send to server
   useEffect(() => {
     const unsubscribeG = subscribeKeys(
       (state) => state.mageGravityChange,
       (pressed) => {
-        if (pressed) {
+        // Don't allow gravity change when controls are disabled
+        if (pressed && !controlsDisabled) {
           const fromSurfaceUpVector = getSurfaceUpVector(currentFloorSurface);
           const { gravity, surface } = getTargetGravityFromCharacterFacing();
 
@@ -305,6 +308,7 @@ export default function Mage() {
     setCurrentFloorSurface,
     currentGravity,
     currentFloorSurface,
+    controlsDisabled,
   ]);
 
   // Function to handle camera collision detection
@@ -426,12 +430,12 @@ export default function Mage() {
       }
     }
 
-    const {
-      mageForward: forward,
-      mageBackward: backward,
-      mageLeftward: leftward,
-      mageRightward: rightward,
-    } = getKeys();
+    // Get keyboard input, but disable when controls are disabled (e.g., character shop open)
+    const keys = getKeys();
+    const forward = controlsDisabled ? false : keys.mageForward;
+    const backward = controlsDisabled ? false : keys.mageBackward;
+    const leftward = controlsDisabled ? false : keys.mageLeftward;
+    const rightward = controlsDisabled ? false : keys.mageRightward;
 
     // Check if character is falling (velocity-based detection)
     const currentVel = rigidBodyRef.current.linvel();
