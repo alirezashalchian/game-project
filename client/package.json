@@ -26,6 +26,7 @@
     "colyseus.js": "^0.16.19",
     "convex": "^1.26.2",
     "dotenv": "^17.2.3",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.503.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
