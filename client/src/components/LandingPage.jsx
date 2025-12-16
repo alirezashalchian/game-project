@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Play, ChevronDown } from "lucide-react";
+import EntryModal from "./EntryModal";
 
-export default function LandingPage({ onPlayNow }) {
+export default function LandingPage({ onGuestEntry, onWalletConnected }) {
   const [scrollY, setScrollY] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [showEntryModal, setShowEntryModal] = useState(false);
 
   useEffect(() => {
     setIsLoaded(true);
@@ -15,6 +17,24 @@ export default function LandingPage({ onPlayNow }) {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const handlePlayClick = () => {
+    setShowEntryModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowEntryModal(false);
+  };
+
+  const handleGuestEntry = () => {
+    setShowEntryModal(false);
+    onGuestEntry();
+  };
+
+  const handleWalletConnected = (address) => {
+    setShowEntryModal(false);
+    onWalletConnected(address);
+  };
 
   // Calculate opacity for video section based on scroll
   const videoOpacity = Math.max(0, 1 - scrollY / 600);
@@ -60,7 +80,7 @@ export default function LandingPage({ onPlayNow }) {
           {/* CTA Button */}
           <button
             className={`landing-cta ${isLoaded ? 'landing-cta--visible' : ''}`}
-            onClick={onPlayNow}
+            onClick={handlePlayClick}
           >
             <Play size={20} />
             <span>PLAY NOW</span>
@@ -105,7 +125,7 @@ export default function LandingPage({ onPlayNow }) {
           {/* Secondary CTA */}
           <button
             className="landing-cta landing-cta--secondary"
-            onClick={onPlayNow}
+            onClick={handlePlayClick}
           >
             <Play size={18} />
             <span>BEGIN YOUR JOURNEY</span>
@@ -134,6 +154,14 @@ export default function LandingPage({ onPlayNow }) {
           </p>
         </div>
       </footer>
+
+      {/* Entry Modal */}
+      <EntryModal
+        isOpen={showEntryModal}
+        onClose={handleCloseModal}
+        onGuestEntry={handleGuestEntry}
+        onWalletConnected={handleWalletConnected}
+      />
     </div>
   );
 }

@@ -50,15 +50,23 @@ export default defineSchema({
   .index("by_owner", ["ownerId"])
   .index("by_coords", ["roomCoords.x", "roomCoords.y", "roomCoords.z"]),
 
-  // Optional: Table for tracking player ownership and permissions
+  // Table for tracking player ownership, characters, and wallet connection
   players: defineTable({
-    sessionId: v.string(), // Colyseus session ID
-    playerId: v.string(), // Unique player identifier
+    walletAddress: v.string(), // Universal Profile address (primary identifier)
     username: v.optional(v.string()),
-    ownedRooms: v.array(v.string()), // Array of room IDs this player owns
+    // Characters owned by the player
+    characters: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        type: v.string(), // "Mage", "Barbarian", etc.
+        imageUrl: v.string(),
+      })
+    ),
+    selectedCharacterId: v.optional(v.string()), // Currently selected character
+    ownedRoomId: v.optional(v.string()), // Room ID the player owns (home room)
     lastSeen: v.number(), // Timestamp
     createdAt: v.number(),
   })
-  .index("by_session", ["sessionId"])
-  .index("by_player", ["playerId"]),
+  .index("by_wallet", ["walletAddress"]),
 });

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { KeyboardControls } from "@react-three/drei";
@@ -16,17 +17,46 @@ import CharacterShopOverlay from "./CharacterShopOverlay";
 import { useGameLoading } from "../hooks/useGameLoading";
 
 export default function GamePage() {
+  const location = useLocation();
+  
+  // Get entry state from navigation
+  const entryState = useMemo(() => {
+    const state = location.state || {};
+    return {
+      isGuest: state.isGuest !== false, // Default to guest if not specified
+      walletAddress: state.walletAddress || null,
+      characterId: state.characterId || null,
+      characterType: state.characterType || null,
+      ownedRoomId: state.ownedRoomId || null,
+    };
+  }, [location.state]);
+
+  // Determine target room based on entry state
+  // Wallet users with owned room spawn there, otherwise default room
+  const targetRoomId = useMemo(() => {
+    if (!entryState.isGuest && entryState.ownedRoomId) {
+      return entryState.ownedRoomId;
+    }
+    return "room-4-4-4"; // Default room
+  }, [entryState]);
+
+  // Parse room coords from roomId
+  const targetRoomCoords = useMemo(() => {
+    const match = targetRoomId.match(/room-(\d+)-(\d+)-(\d+)/);
+    if (match) {
+      return [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+    }
+    return [4, 4, 4]; // Default
+  }, [targetRoomId]);
+
   const {
     isLoading,
     loadingProgress,
     loadingStage,
     loadingErrors,
     hasErrors,
-    // roomData removed - not needed
-  } = useGameLoading();
+  } = useGameLoading({ targetRoomCoords });
 
-  // TODO: Replace with actual auth check
-  const [isGuest] = useState(true);
   const [showCharacterShop, setShowCharacterShop] = useState(false);
 
   const handleGetCharacter = () => {
@@ -101,7 +131,8 @@ export default function GamePage() {
           <GravityChangeUI />
           <VoiceToggle />
           <RemoteAudio />
-          {isGuest && <GuestTutorial onGetCharacter={handleGetCharacter} />}
+          {/* Only show tutorial for guest users - wallet users skip it */}
+          {entryState.isGuest && <GuestTutorial onGetCharacter={handleGetCharacter} />}
           <CharacterShopOverlay 
             isOpen={showCharacterShop} 
             onClose={handleCloseCharacterShop} 

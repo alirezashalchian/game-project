@@ -1,29 +1,43 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useColyseus } from '../context/ColyseusContext';
 
-export function useGameLoading() {
+/**
+ * Hook for managing game loading state
+ * @param {Object} options - Loading options
+ * @param {number[]} options.targetRoomCoords - Target room coordinates [x, y, z] to connect to
+ */
+export function useGameLoading({ targetRoomCoords = [4, 4, 4] } = {}) {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStage, setLoadingStage] = useState('Initializing...');
   const [isLoading, setIsLoading] = useState(true);
   const [loadingErrors, setLoadingErrors] = useState([]);
   const hasInitiatedConnection = useRef(false);
+  const currentTargetRef = useRef(null);
 
   // Get Colyseus connection status and connectToRoom function
   const { isConnected: colyseusConnected, connectToRoom } = useColyseus();
 
-  // Get initial room data from Convex - this is what we're actually waiting for
-  const roomData = useQuery(api.rooms.getRoomData, { roomId: "room-4-4-4" });
+  // Generate room ID from coordinates
+  const targetRoomId = useMemo(() => {
+    return `room-${targetRoomCoords[0]}-${targetRoomCoords[1]}-${targetRoomCoords[2]}`;
+  }, [targetRoomCoords]);
 
-  // Initiate Colyseus connection during loading (to the default room)
+  // Get initial room data from Convex for the target room
+  const roomData = useQuery(api.rooms.getRoomData, { roomId: targetRoomId });
+
+  // Initiate Colyseus connection during loading (to the target room)
   useEffect(() => {
-    if (!hasInitiatedConnection.current && connectToRoom) {
+    const targetKey = targetRoomCoords.join('-');
+    
+    // Only connect if we haven't initiated or if target changed
+    if (connectToRoom && (!hasInitiatedConnection.current || currentTargetRef.current !== targetKey)) {
       hasInitiatedConnection.current = true;
-      // Connect to the default starting room [4, 4, 4]
-      connectToRoom([4, 4, 4]);
+      currentTargetRef.current = targetKey;
+      connectToRoom(targetRoomCoords);
     }
-  }, [connectToRoom]);
+  }, [connectToRoom, targetRoomCoords]);
 
   useEffect(() => {
     const checkServices = async () => {
