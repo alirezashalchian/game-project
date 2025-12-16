@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useColyseus } from '../context/ColyseusContext';
@@ -8,12 +8,22 @@ export function useGameLoading() {
   const [loadingStage, setLoadingStage] = useState('Initializing...');
   const [isLoading, setIsLoading] = useState(true);
   const [loadingErrors, setLoadingErrors] = useState([]);
+  const hasInitiatedConnection = useRef(false);
 
-  // Get Colyseus connection status
-  const { isConnected: colyseusConnected } = useColyseus();
+  // Get Colyseus connection status and connectToRoom function
+  const { isConnected: colyseusConnected, connectToRoom } = useColyseus();
 
   // Get initial room data from Convex - this is what we're actually waiting for
   const roomData = useQuery(api.rooms.getRoomData, { roomId: "room-4-4-4" });
+
+  // Initiate Colyseus connection during loading (to the default room)
+  useEffect(() => {
+    if (!hasInitiatedConnection.current && connectToRoom) {
+      hasInitiatedConnection.current = true;
+      // Connect to the default starting room [4, 4, 4]
+      connectToRoom([4, 4, 4]);
+    }
+  }, [connectToRoom]);
 
   useEffect(() => {
     const checkServices = async () => {
@@ -30,12 +40,12 @@ export function useGameLoading() {
 
         setLoadingProgress(60);
 
-        // Step 2: Check Colyseus connection (TEMPORARILY COMMENTED OUT)
-        // setLoadingStage('Connecting to multiplayer...');
+        // Step 2: Check Colyseus connection
+        setLoadingStage('Connecting to multiplayer...');
         
-        // if (!colyseusConnected) {
-        //   return; // Exit and wait for connection
-        // }
+        if (!colyseusConnected) {
+          return; // Exit and wait for connection
+        }
 
         setLoadingProgress(80);
 
