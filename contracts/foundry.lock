@@ -1,0 +1,32 @@
+{
+  "lib/ERC725": {
+    "tag": {
+      "name": "v5.2.0",
+      "rev": "edd88338165cfebb3ad8a222dfd86100db724067"
+    }
+  },
+  "lib/forge-std": {
+    "tag": {
+      "name": "v1.12.0",
+      "rev": "7117c90c8cf6c68e5acce4f09a6b24715cea4de6"
+    }
+  },
+  "lib/lsp-smart-contracts": {
+    "tag": {
+      "name": "v0.12.1",
+      "rev": "cab33b2b7870c9e717fa6a6467c12e6822b134a1"
+    }
+  },
+  "lib/openzeppelin-contracts": {
+    "tag": {
+      "name": "v4.9.6",
+      "rev": "dc44c9f1a4c3b10af99492eed84f83ed244203f6"
+    }
+  },
+  "lib/solidity-bytes-utils": {
+    "tag": {
+      "name": "v0.8.4",
+      "rev": "f4413cd6137b78403e3a1156bee6aceab46b46fa"
+    }
+  }
+}

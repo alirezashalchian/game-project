@@ -1,0 +1,28 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+
+# Enable optimizer for smaller contract sizes (required for mainnet deployment)
+optimizer = true
+optimizer_runs = 100
+via_ir = true  # Uses IR-based code generation for smaller bytecode
+
+remappings = [
+    "@lukso/lsp-smart-contracts/=lib/lsp-smart-contracts/contracts/",
+    "@erc725/smart-contracts/contracts/=lib/ERC725/implementations/contracts/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "solidity-bytes-utils/=lib/solidity-bytes-utils/",
+    "forge-std/=lib/forge-std/src/"
+]
+
+# Lukso Mainnet configuration
+[rpc_endpoints]
+lukso_mainnet = "https://rpc.mainnet.lukso.network"
+lukso_testnet = "https://rpc.testnet.lukso.network"
+
+[etherscan]
+lukso_mainnet = { key = "${ETHERSCAN_API_KEY}", url = "https://explorer.execution.mainnet.lukso.network/api" }
+lukso_testnet = { key = "${ETHERSCAN_API_KEY}", url = "https://explorer.execution.testnet.lukso.network/api" }
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

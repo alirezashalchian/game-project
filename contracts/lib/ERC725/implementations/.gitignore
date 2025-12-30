@@ -1,0 +1,25 @@
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+types
+
+#Hardhat files
+cache
+artifacts
+
+# Hardhat holders
+build
+cache
+types
+coverage
+
+.openzeppelin/.session
+
+# Solidity generated files/folders
+solc
+
+# Mac
+.DS_Store
