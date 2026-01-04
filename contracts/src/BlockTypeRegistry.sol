@@ -139,6 +139,57 @@ contract BlockTypeRegistry is LSP8IdentifiableDigitalAsset {
     }
     
     /**
+     * @notice Register an externally deployed block token contract (e.g., PhotoFrameBlock).
+     * @dev Use this for special block types that need custom contracts.
+     * @param name_ Block type display name
+     * @param symbol_ Token symbol
+     * @param isPremium_ Whether this is a premium block
+     * @param pricePerUnit_ Price in wei per block
+     * @param modelPath_ Path to the 3D model file
+     * @param tokenContract_ Address of the already-deployed token contract
+     * @return blockTypeId The unique ID for this block type
+     */
+    function registerExternalBlockType(
+        string calldata name_,
+        string calldata symbol_,
+        bool isPremium_,
+        uint256 pricePerUnit_,
+        string calldata modelPath_,
+        address tokenContract_
+    ) external onlyOwner returns (bytes32 blockTypeId) {
+        // Generate unique block type ID from name
+        blockTypeId = keccak256(abi.encodePacked(name_));
+        
+        // Check if already exists
+        if (blockTypes[blockTypeId].exists) {
+            revert BlockTypeAlreadyExists(blockTypeId);
+        }
+        
+        // Verify token contract is valid (has code)
+        require(tokenContract_.code.length > 0, "Invalid token contract");
+        
+        // Store block type info
+        blockTypes[blockTypeId] = BlockTypeInfo({
+            name: name_,
+            symbol: symbol_,
+            isPremium: isPremium_,
+            pricePerUnit: pricePerUnit_,
+            modelPath: modelPath_,
+            tokenContract: tokenContract_,
+            exists: true
+        });
+        
+        allBlockTypeIds.push(blockTypeId);
+        
+        // Mint registry NFT (represents ownership of this block type definition)
+        _mint(owner(), blockTypeId, true, "");
+        
+        emit BlockTypeRegistered(blockTypeId, name_, isPremium_, tokenContract_);
+        
+        return blockTypeId;
+    }
+
+    /**
      * @notice Set the starting quantity for a block type (given to new players).
      * @param blockTypeId The block type ID
      * @param quantity Number of blocks to give new players

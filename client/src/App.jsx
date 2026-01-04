@@ -5,6 +5,7 @@ import { api } from "../convex/_generated/api";
 import { ColyseusProvider } from "./context/ColyseusContext";
 import { ConvexWrapper } from "./context/ConvexContext";
 import { WalletProvider } from "./context/WalletContext";
+import { ContractsProvider } from "./context/ContractsContext";
 import HuddleProvider from "./context/HuddleProvider";
 import HuddleAudioProvider from "./context/HuddleAudioContext";
 import LandingPage from "./components/LandingPage";
@@ -100,13 +101,15 @@ export default function App() {
   return (
     <ConvexWrapper>
       <WalletProvider>
-        <ColyseusProvider>
-          <HuddleProvider>
-            <HuddleAudioProvider>
-              <AppContent />
-            </HuddleAudioProvider>
-          </HuddleProvider>
-        </ColyseusProvider>
+        <ContractsProvider>
+          <ColyseusProvider>
+            <HuddleProvider>
+              <HuddleAudioProvider>
+                <AppContent />
+              </HuddleAudioProvider>
+            </HuddleProvider>
+          </ColyseusProvider>
+        </ContractsProvider>
       </WalletProvider>
     </ConvexWrapper>
   );

@@ -9,6 +9,14 @@ import {
 } from "@lukso/lsp-smart-contracts/LSP8IdentifiableDigitalAsset/LSP8Constants.sol";
 
 /**
+ * @title IBlockTypeRegistry
+ * @notice Interface for the BlockTypeRegistry to grant starting blocks
+ */
+interface IBlockTypeRegistry {
+    function grantStartingBlocks(address player, bytes32 characterTokenId) external;
+}
+
+/**
  * @title CharacterNFT
  * @notice LSP8 NFT contract for unique game characters.
  * @dev Each character NFT grants ownership of exactly one room in the 9x9x9 grid.
@@ -184,6 +192,16 @@ contract CharacterNFT is LSP8IdentifiableDigitalAsset {
         
         // Mint the NFT
         _mint(msg.sender, tokenId, true, "");
+        
+        // Grant starting blocks if registry is set
+        if (blockRegistry != address(0)) {
+            try IBlockTypeRegistry(blockRegistry).grantStartingBlocks(msg.sender, tokenId) {
+                // Starting blocks granted successfully
+            } catch {
+                // If granting fails, we still want the mint to succeed
+                // The admin can manually grant blocks later if needed
+            }
+        }
         
         // Refund excess payment
         if (msg.value > mintPrice) {

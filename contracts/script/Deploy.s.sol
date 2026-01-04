@@ -155,17 +155,25 @@ contract DeployScript is Script {
     }
     
     function _registerPhotoFrame(BlockTypeRegistry registry) internal {
-        // Photo frames are special premium blocks with metadata support
-        // Note: PhotoFrameBlock is deployed separately by the registry
-        // when we register it as a block type, but we use the standard BlockToken
-        // For PhotoFrameBlock, we would need to deploy it separately and register
-        // For simplicity, we register it as a premium block here
-        registry.registerBlockType(
+        // Deploy PhotoFrameBlock separately since it has custom metadata functionality
+        PhotoFrameBlock photoFrame = new PhotoFrameBlock(
+            "Photo Frame",
+            "FRAME",
+            address(registry),
+            PHOTO_FRAME_PRICE,
+            "/models/gltf/photo_frame.gltf"
+        );
+        
+        console.log("PhotoFrameBlock deployed at:", address(photoFrame));
+        
+        // Register the externally deployed PhotoFrameBlock with the registry
+        registry.registerExternalBlockType(
             "Photo Frame",
             "FRAME",
             true,
             PHOTO_FRAME_PRICE,
-            "/models/gltf/photo_frame.gltf" // You'll need to add this model
+            "/models/gltf/photo_frame.gltf",
+            address(photoFrame)
         );
     }
     
